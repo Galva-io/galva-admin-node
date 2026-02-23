@@ -1,23 +1,14 @@
-export type BillingEventType = 
-  | 'initial-purchase'
-  | 'renewal'
-  | 'cancellation'
-  | 'billing-issue'
-  | 'expiration'
-  | 'upgraded'
-  | 'refund'
-  | 'resubscribe'
-  | 'transfer'
-  | 'grace_period_start';
+import { BillingPlatformType } from "./enums";
+import { RawBillingEvent } from "./raw-events";
 
-export type BillingPlatformType = 
-  | 'ios'
-  | 'android'
-  | 'stripe'
-  | 'manual'
-  | 'web';
+export interface BillingTransaction {
+  amount: number;
+  currency: string;
+  amountInUsd: number;
+  usdRate: number;
+}
 
-export interface BillingBaseEvent {
+interface BillingEventBase {
   id: string;
   originalTransactionId?: string;
   transactionId?: string;
@@ -26,71 +17,77 @@ export interface BillingBaseEvent {
   appIdentifier: string;
   productIdentifier: string;
   planIdentifier: string;
-  type: BillingEventType;
   platform: BillingPlatformType;
   eventTimestamp: string;
+  transaction?: BillingTransaction;
 }
 
-export interface BillingInitialPurchaseEvent extends BillingBaseEvent {
-  type: 'initial-purchase';
+export interface BillingInitialPurchaseEvent extends BillingEventBase {
+  type: "initial-purchase";
   purchasedAt: string;
   expiresAt?: string;
   isTrial?: boolean;
 }
 
-export interface BillingRenewalEvent extends BillingBaseEvent {
-  type: 'renewal';
+export interface BillingRenewalEvent extends BillingEventBase {
+  type: "renewal";
   purchasedAt: string;
   expiresAt?: string;
   isCollectiveSharing?: boolean;
 }
 
-export interface BillingCancellationEvent extends BillingBaseEvent {
-  type: 'cancellation';
+export interface BillingCancellationEvent extends BillingEventBase {
+  type: "cancellation";
   expiresAt?: string;
   cancelReason: string;
 }
 
-export interface BillingIssueEvent extends BillingBaseEvent {
-  type: 'billing-issue';
+export interface BillingIssueEvent extends BillingEventBase {
+  type: "billing-issue";
   expiresAt?: string;
 }
 
-export interface BillingExpirationEvent extends BillingBaseEvent {
-  type: 'expiration';
+export interface BillingExpirationEvent extends BillingEventBase {
+  type: "expiration";
   expirationReason: string;
 }
 
-export interface BillingUpgradedEvent extends BillingBaseEvent {
-  type: 'upgraded';
+export interface BillingUpgradedEvent extends BillingEventBase {
+  type: "upgraded";
   fromPlanId: string;
   toPlanId: string;
   expiresAt?: string;
 }
 
-export interface BillingRefundedEvent extends BillingBaseEvent {
-  type: 'refund';
+export interface BillingRefundedEvent extends BillingEventBase {
+  type: "refund";
   reason: string;
 }
 
-export interface BillingResubscribeEvent extends BillingBaseEvent {
-  type: 'resubscribe';
+export interface BillingResubscribeEvent extends BillingEventBase {
+  type: "resubscribe";
   purchasedAt: string;
   expiresAt?: string;
 }
 
-export interface BillingTransferEvent extends BillingBaseEvent {
-  type: 'transfer';
+export interface BillingTransferEvent extends BillingEventBase {
+  type: "transfer";
   fromAppUserId: string;
   toAppUserId: string;
 }
 
-export interface BillingGracePeriodStartEvent extends BillingBaseEvent {
-  type: 'grace_period_start';
+export interface BillingGracePeriodStartEvent extends BillingEventBase {
+  type: "grace_period_start";
   expiresAt?: string;
 }
 
-export type BillingEvent = 
+export interface BillingRecoverEvent extends BillingEventBase {
+  type: "recover";
+  purchasedAt: string;
+  expiresAt?: string;
+}
+
+export type BillingEvent =
   | BillingInitialPurchaseEvent
   | BillingRenewalEvent
   | BillingCancellationEvent
@@ -100,4 +97,9 @@ export type BillingEvent =
   | BillingRefundedEvent
   | BillingResubscribeEvent
   | BillingTransferEvent
-  | BillingGracePeriodStartEvent;
+  | BillingGracePeriodStartEvent
+  | BillingRecoverEvent;
+
+export type SyncBillingEventPayload =
+  | { type: "standard"; event: BillingEvent }
+  | { type: "raw"; event: RawBillingEvent };
