@@ -1,4 +1,3 @@
-import { BillingPlatformType } from "../enums";
 import { AppstoreWebhookBody } from "./appstore";
 import { PlaystoreDeveloperNotification } from "./playstore";
 import { PaddleWebhookBody } from "./paddle";
@@ -8,19 +7,19 @@ export * from "./playstore";
 export * from "./paddle";
 
 export interface RawBillingEventAppstore {
-  platform: Extract<BillingPlatformType, "appstore">;
+  platform: "appstore";
   payload: AppstoreWebhookBody;
   endUserId: string;
 }
 
 export interface RawBillingEventPlaystore {
-  platform: Extract<BillingPlatformType, "playstore">;
+  platform: "playstore";
   payload: PlaystoreDeveloperNotification;
   endUserId: string;
 }
 
 export interface RawBillingEventPaddle {
-  platform: Extract<BillingPlatformType, "paddle">;
+  platform: "paddle";
   payload: PaddleWebhookBody;
   endUserId: string;
 }
