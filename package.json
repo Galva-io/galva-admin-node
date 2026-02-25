@@ -2,13 +2,20 @@
   "name": "galva-admin-node",
   "version": "1.0.0",
   "description": "Node.js SDK for Galva Admin API",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "test": "echo \"No tests yet\"",
-    "prepublishOnly": "npm run build"
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
   },
   "keywords": [
     "galva",
@@ -22,7 +29,9 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.19.33",
-    "typescript": "^5.0.0"
+    "googleapis": "^171.4.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -30,5 +39,8 @@
   "files": [
     "dist",
     "README.md"
-  ]
+  ],
+  "peerDependencies": {
+    "googleapis": "^171.4.0"
+  }
 }
