@@ -93,6 +93,11 @@ export class Galva {
         throw new Error(
           `Galva API error: ${response.status} ${response.statusText} - ${errorBody}`,
         );
+      } else {
+        const responseData = await response.json();
+        if (responseData.error) {
+          throw new Error(`Galva API error: ${responseData.error}`);
+        }
       }
     } finally {
       clearTimeout(timeoutId);
@@ -113,6 +118,7 @@ export class Galva {
             signedPayload,
             appAppleId: this.config.appAppleId,
             bundleId: this.config.bundleId,
+            env: this.config.environment,
           },
           options,
         });
