@@ -28,6 +28,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@paddle/paddle-node-sdk": "^3.6.0",
     "@types/node": "^20.19.33",
     "googleapis": "^171.4.0",
     "tsup": "^8.5.1",
@@ -41,6 +42,7 @@
     "README.md"
   ],
   "peerDependencies": {
+    "@paddle/paddle-node-sdk": "^3.6.0",
     "googleapis": "^171.4.0"
   }
 }

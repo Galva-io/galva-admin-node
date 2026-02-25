@@ -1,5 +1,6 @@
 import { PlaystoreDeveloperNotification } from './types/playstore';
 import { PlaystoreService } from './services/playstore';
+import { EventEntity, Paddle } from '@paddle/paddle-node-sdk';
 
 export interface GalvaOptions {
   /**
@@ -32,14 +33,20 @@ export interface PlaystoreCredentials {
   key: string;
 }
 
+export interface PaddleCredentials {
+  apiKey: string;
+  secretKey: string;
+  signature: string;
+}
+
 const PRODUCTION_API_URL = 'https://api.galva.io/v1';
 const DEVELOPMENT_API_URL = 'https://api.sandbox.galva.io/v1';
 export class Galva {
-  private config: Required<GalvaOptions>;
+  private config: GalvaOptions;
   private readonly baseUrl: string;
 
-  constructor(options: GalvaOptions) {
-    const apiKey = options.apiKey || process.env.GALVA_API_KEY;
+  constructor(options?: GalvaOptions) {
+    const apiKey = options?.apiKey || process.env.GALVA_API_KEY;
     if (!apiKey) {
       throw new Error(
         'API key is required. Provide it in options or set GALVA_API_KEY env variable.',
@@ -49,9 +56,9 @@ export class Galva {
     this.config = {
       apiKey: apiKey,
       environment:
-        options.environment ||
+        options?.environment ||
         (process.env.NODE_ENV === 'development' ? 'development' : 'production'),
-      timeout: options.timeout || 10000,
+      timeout: options?.timeout || 10000,
     };
     this.baseUrl =
       this.config.environment === 'development'
@@ -163,7 +170,52 @@ export class Galva {
     }
   }
 
-  public syncRawEvent = {
+  private _paddle(
+    endUserId: string,
+    rawBody: string,
+    auth: PaddleCredentials,
+  ): Promise<void>;
+
+  private _paddle(endUserId: string, eventEntity: EventEntity): Promise<void>;
+
+  private async _paddle(
+    endUserId: string,
+    rawBodyOrEvent: string | EventEntity,
+    auth?: PaddleCredentials,
+  ): Promise<void> {
+    let eventData: EventEntity;
+
+    if (typeof rawBodyOrEvent === 'string') {
+      if (!auth) {
+        throw new Error(
+          'Auth credentials are required when payload is provided as signed body.',
+        );
+      }
+
+      const paddle = new Paddle(auth.apiKey);
+      try {
+        eventData = await paddle.webhooks.unmarshal(
+          rawBodyOrEvent,
+          auth.secretKey,
+          auth.signature,
+        );
+      } catch (error) {
+        throw new Error(
+          `Invalid Paddle webhook data: ${(error as Error).message}`,
+        );
+      }
+    } else {
+      eventData = rawBodyOrEvent;
+    }
+
+    await this.sendRequest('POST', '/endUsers/billingEvents', {
+      platform: 'paddle',
+      endUserId,
+      payload: eventData,
+    });
+  }
+
+  public billingEvent = {
     appstore: async (
       endUserId: string,
       payload: {
@@ -194,5 +246,7 @@ export class Galva {
     },
 
     playstore: this._playstore.bind(this),
+
+    paddle: this._paddle.bind(this),
   };
 }

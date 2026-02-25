@@ -1,0 +1,48 @@
+// import { Galva } from './galva';
+
+// async function sample() {
+//   const galva = new Galva();
+
+//   const endUserId = '550e8400-e29b-41d4-a716-446655440000';
+
+//   /* Appstore */
+//   await galva.billingEvent.appstore(endUserId, {
+//     signedPayload: 'your_signed_payload',
+//     bundleId: 'your_bundle_id',
+//     appAppleId: 1234567890,
+//   });
+
+//   /* Playstore */
+
+//   await galva.billingEvent.playstore(endUserId, 'your_base64_payload', {
+//     email: 'your_email',
+//     key: 'your_key',
+//   });
+//   await galva.billingEvent.playstore(endUserId, {
+//     version: '1.0',
+//     packageName: 'com.example.app',
+//     eventTimeMillis: 1700000000000,
+//     subscriptionNotification: {
+//       notificationType: 1,
+//       purchaseToken: 'your_purchase_token',
+//       subscriptionPurchase: {
+//         kind: 'androidpublisher#subscriptionPurchase',
+//         expiryTimeMillis: 1700000000000,
+//         autoRenewing: true,
+//       },
+//     },
+//   });
+
+//   /* Paddle */
+//   await galva.billingEvent.paddle(endUserId, 'your_signed_body', {
+//     apiKey: 'your_api_key',
+//     secretKey: 'your_secret_key',
+//     signature: 'your_signature',
+//   });
+//   await galva.billingEvent.paddle(endUserId, {
+//     alert_name: 'subscription_created',
+//     alert_id: '123456',
+//     subscription_id: 'sub_123456',
+//     email: 'user@example.com',
+//   });
+// }
