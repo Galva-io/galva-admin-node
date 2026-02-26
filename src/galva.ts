@@ -1,6 +1,22 @@
-import { PlaystoreDeveloperNotification } from './types/playstore';
-import { PlaystoreService } from './services/playstore';
-import { EventEntity, Paddle } from '@paddle/paddle-node-sdk';
+import { PlaystoreDeveloperNotification } from "./types/playstore";
+import { PlaystoreService } from "./services/playstore";
+import { EventEntity, Paddle } from "@paddle/paddle-node-sdk";
+import type { EndUserTraits, EndUserDefaultInfo } from "./types/endUser";
+import { END_USER_DEFAULT_INFO_TO_TRAIT_MAP } from "./types/endUser";
+import { GalvaError } from "./types/error";
+
+export type {
+  EndUserDefaultTraits,
+  EndUserTraits,
+  EndUserDefaultInfo,
+} from "./types/endUser";
+export {
+  EndUserDefaultTraitName,
+  END_USER_DEFAULT_TRAIT_MAP,
+  END_USER_DEFAULT_INFO_TO_TRAIT_MAP,
+} from "./types/endUser";
+export { GalvaError } from "./types/error";
+export type { GalvaErrorResponse } from "./types/error";
 
 export interface GalvaOptions {
   /**
@@ -9,7 +25,7 @@ export interface GalvaOptions {
    * @type {('production' | 'development')}
    * @memberof GalvaOptions
    */
-  environment?: 'production' | 'development';
+  environment?: "production" | "development";
 
   /**
    * API key retrieved from  Galva dashboard. Can also be set via GALVA_API_KEY environment variable.
@@ -78,8 +94,8 @@ export interface CredentialsConfig {
   paddle?: PaddleCredentials;
 }
 
-const PRODUCTION_API_URL = 'https://api.galva.dev';
-const DEVELOPMENT_API_URL = 'https://api.galva.dev';
+const PRODUCTION_API_URL = "https://api.galva.io";
+const DEVELOPMENT_API_URL = "https://api.galva.dev";
 
 /**
  * Galva SDK client for tracking billing events from various payment platforms.
@@ -117,20 +133,22 @@ export class Galva {
   constructor(options?: GalvaOptions) {
     const apiKey = options?.apiKey || process.env.GALVA_API_KEY;
     if (!apiKey) {
-      throw new Error(
-        'API key is required. Provide it in options or set GALVA_API_KEY env variable.',
-      );
+      throw new GalvaError({
+        code: "MISSING_API_KEY",
+        message:
+          "API key is required. Provide it in options or set GALVA_API_KEY env variable.",
+      });
     }
 
     this.config = {
       apiKey: apiKey,
       environment:
         options?.environment ||
-        (process.env.NODE_ENV === 'development' ? 'development' : 'production'),
+        (process.env.NODE_ENV === "development" ? "development" : "production"),
       timeout: options?.timeout || 10000,
     };
     this.baseUrl =
-      this.config.environment === 'development'
+      this.config.environment === "development"
         ? DEVELOPMENT_API_URL
         : PRODUCTION_API_URL;
   }
@@ -149,24 +167,28 @@ export class Galva {
       const response = await fetch(url, {
         method,
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.config.apiKey}`,
+          "Content-Type": "application/json",
+          "x-api-key": this.config.apiKey!,
         },
         body: data ? JSON.stringify(data) : undefined,
         signal: controller.signal,
       });
 
       if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(
-          `Galva API error: ${response.status} ${response.statusText} - ${errorBody}`,
-        );
-      } else {
-        const responseData = await response.json();
-        if (responseData.error) {
-          throw new Error(`Galva API error: ${responseData.error}`);
-        }
+        const errorResponse = await response.json();
+        throw new GalvaError(errorResponse);
       }
+    } catch (error) {
+      if (error instanceof GalvaError) {
+        throw error;
+      }
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new GalvaError({
+          code: "TIMEOUT",
+          message: `Request timed out after ${this.config.timeout}ms`,
+        });
+      }
+      throw GalvaError.from(error);
     } finally {
       clearTimeout(timeoutId);
     }
@@ -223,14 +245,20 @@ export class Galva {
      * @param {string} payload.bundleId - The app's bundle identifier (e.g., 'com.example.app')
      * @param {number} payload.appAppleId - The app's Apple ID from App Store Connect
      * @param {Record<string, any>} [options] - Additional options to pass with the request
-     * @returns {Promise<{ success: boolean; error?: string }>} Result object indicating success or failure
+     * @throws {GalvaError} Throws if the API request fails
      * @example
      * ```typescript
-     * const result = await galva.billingEvent.appstore('user-123', {
-     *   signedPayload: signedPayloadFromApple,
-     *   bundleId: 'com.example.myapp',
-     *   appAppleId: 123456789
-     * });
+     * try {
+     *   await galva.billingEvent.appstore('user-123', {
+     *     signedPayload: signedPayloadFromApple,
+     *     bundleId: 'com.example.myapp',
+     *     appAppleId: 123456789
+     *   });
+     * } catch (error) {
+     *   if (error instanceof GalvaError) {
+     *     console.error(error.code, error.message);
+     *   }
+     * }
      * ```
      */
     appstore: async (
@@ -241,25 +269,19 @@ export class Galva {
         appAppleId: number;
       },
       options?: Record<string, any>,
-    ): Promise<{ success: boolean; error?: string }> => {
-      try {
-        const { signedPayload, bundleId, appAppleId } = payload;
-        await this.sendRequest('POST', '/endUsers/billingEvents', {
-          platform: 'appstore',
-          endUserId,
-          payload: {
-            signedPayload,
-            appAppleId: appAppleId,
-            bundleId: bundleId,
-            env: this.config.environment,
-          },
-          options,
-        });
-        return { success: true };
-      } catch (error) {
-        console.error('Error syncing App Store event:', error);
-        return { success: false, error: (error as Error).message };
-      }
+    ): Promise<void> => {
+      const { signedPayload, bundleId, appAppleId } = payload;
+      await this.sendRequest("POST", "/endUsers/billingEvents", {
+        platform: "appstore",
+        endUserId,
+        payload: {
+          signedPayload,
+          appAppleId: appAppleId,
+          bundleId: bundleId,
+          env: this.config.environment,
+        },
+        options,
+      });
     },
 
     /**
@@ -560,6 +582,101 @@ class GalvaWithCreds {
         platform: 'paddle',
         endUserId,
         payload: eventData,
+      });
+    },
+  };
+
+  /**
+   * End user management methods.
+   */
+  public endUser = {
+    /**
+     * Identifies an end user with optional traits and context.
+     *
+     * @param {string} endUserId - Unique identifier for the end user in your system
+     * @param {Object} [options] - Optional identification data
+     * @param {string} [options.timestamp] - ISO 8601 timestamp of when the identification occurred
+     * @param {Record<string, any>} [options.context] - Additional context about the identification
+     * @param {EndUserTraits} [options.traits] - User traits/attributes to associate with the user. Use EndUserDefaultTraitName enum for built-in traits.
+     * @throws {GalvaError} Throws if the API request fails
+     * @example
+     * ```typescript
+     * import { EndUserDefaultTraitName, GalvaError } from 'galva';
+     *
+     * try {
+     *   await galva.endUser.identify('user-123', {
+     *     timestamp: new Date().toISOString(),
+     *     traits: {
+     *       [EndUserDefaultTraitName.EMAIL]: 'user@example.com',
+     *       [EndUserDefaultTraitName.FULL_NAME]: 'John Doe',
+     *       plan: 'premium', // custom trait
+     *     },
+     *     context: { source: 'web-app' }
+     *   });
+     * } catch (error) {
+     *   if (error instanceof GalvaError) {
+     *     console.error(error.code, error.message);
+     *   }
+     * }
+     * ```
+     */
+    identify: async (
+      endUserId: string,
+      options?: {
+        timestamp?: string;
+        context?: Record<string, any>;
+        traits?: EndUserTraits;
+      },
+    ): Promise<void> => {
+      await this.sendRequest("POST", "/endUsers:identify", {
+        endUserId,
+        timestamp: options?.timestamp,
+        context: options?.context,
+        traits: options?.traits,
+      });
+    },
+
+    /**
+     * Updates an end user's default profile info (default traits).
+     *
+     * @param {string} endUserId - Unique identifier for the end user in your system
+     * @param {EndUserDefaultInfo} defaultInfo - User profile info to update
+     * @throws {GalvaError} Throws if the API request fails
+     * @example
+     * ```typescript
+     * import { GalvaError } from 'galva';
+     *
+     * try {
+     *   await galva.endUser.updateDefaultInfo('user-123', {
+     *     email: 'user@example.com',
+     *     fullName: 'John Doe',
+     *     country: 'US',
+     *     timezone: 'America/New_York',
+     *   });
+     * } catch (error) {
+     *   if (error instanceof GalvaError) {
+     *     console.error(error.code, error.message);
+     *   }
+     * }
+     * ```
+     */
+    updateDefaultInfo: async (
+      endUserId: string,
+      defaultInfo: EndUserDefaultInfo,
+    ): Promise<void> => {
+      const traits: EndUserTraits = {};
+
+      for (const [key, value] of Object.entries(defaultInfo)) {
+        if (value !== undefined) {
+          const traitName =
+            END_USER_DEFAULT_INFO_TO_TRAIT_MAP[key as keyof EndUserDefaultInfo];
+          traits[traitName] = value;
+        }
+      }
+
+      await this.sendRequest("POST", "/endUsers:identify", {
+        endUserId,
+        traits,
       });
     },
   };
