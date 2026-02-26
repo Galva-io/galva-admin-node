@@ -54,8 +54,8 @@ export interface PaddleCredentials {
   signature: string;
 }
 
-const PRODUCTION_API_URL = 'https://api.galva.io/v1';
-const DEVELOPMENT_API_URL = 'https://api.sandbox.galva.io/v1';
+const PRODUCTION_API_URL = 'https://api.galva.dev';
+const DEVELOPMENT_API_URL = 'https://api.galva.dev';
 
 /**
  * Galva SDK client for tracking billing events from various payment platforms.
