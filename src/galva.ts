@@ -399,23 +399,27 @@ class GalvaWithCreds {
         method,
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.config.apiKey}`,
+          'x-api-key': this.config.apiKey!,
         },
         body: data ? JSON.stringify(data) : undefined,
         signal: controller.signal,
       });
 
       if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(
-          `Galva API error: ${response.status} ${response.statusText} - ${errorBody}`,
-        );
-      } else {
-        const responseData = await response.json();
-        if (responseData.error) {
-          throw new Error(`Galva API error: ${responseData.error}`);
-        }
+        const errorResponse = await response.json();
+        throw new GalvaError(errorResponse);
       }
+    } catch (error) {
+      if (error instanceof GalvaError) {
+        throw error;
+      }
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new GalvaError({
+          code: 'TIMEOUT',
+          message: `Request timed out after ${this.config.timeout}ms`,
+        });
+      }
+      throw GalvaError.from(error);
     } finally {
       clearTimeout(timeoutId);
     }
@@ -436,8 +440,8 @@ class GalvaWithCreds {
      * @param {string} endUserId - Unique identifier for the end user in your system
      * @param {string} signedPayload - The signed payload from Apple's server notification
      * @param {Record<string, any>} [options] - Additional options to pass with the request
-     * @returns {Promise<{ success: boolean; error?: string }>} Result object indicating success or failure
-     * @throws {Error} If appstore credentials were not provided in withCredentials()
+     * @returns {Promise<void>}
+     * @throws {GalvaError} If appstore credentials were not provided or API request fails
      *
      * @example
      * ```typescript
@@ -448,30 +452,25 @@ class GalvaWithCreds {
       endUserId: string,
       signedPayload: string,
       options?: Record<string, any>,
-    ): Promise<{ success: boolean; error?: string }> => {
+    ): Promise<void> => {
       if (!this.credentials.appstore) {
-        throw new Error(
-          'App Store credentials are required. Provide them in withCredentials().',
-        );
+        throw new GalvaError({
+          code: 'MISSING_CREDENTIALS',
+          message: 'App Store credentials are required. Provide them in withCredentials().',
+        });
       }
 
-      try {
-        await this.sendRequest('POST', '/endUsers/billingEvents', {
-          platform: 'appstore',
-          endUserId,
-          payload: {
-            signedPayload,
-            appAppleId: this.credentials.appstore.appAppleId,
-            bundleId: this.credentials.appstore.bundleId,
-            env: this.config.environment,
-          },
-          options,
-        });
-        return { success: true };
-      } catch (error) {
-        console.error('Error syncing App Store event:', error);
-        return { success: false, error: (error as Error).message };
-      }
+      await this.sendRequest('POST', '/endUsers/billingEvents', {
+        platform: 'appstore',
+        endUserId,
+        payload: {
+          signedPayload,
+          appAppleId: this.credentials.appstore.appAppleId,
+          bundleId: this.credentials.appstore.bundleId,
+          env: this.config.environment,
+        },
+        options,
+      });
     },
 
     /**
@@ -481,7 +480,7 @@ class GalvaWithCreds {
      * @param {string} endUserId - Unique identifier for the end user in your system
      * @param {string} base64Payload - Base64-encoded payload from Google Pub/Sub
      * @returns {Promise<void>}
-     * @throws {Error} If playstore credentials were not provided in withCredentials()
+     * @throws {GalvaError} If playstore credentials were not provided or API request fails
      *
      * @example
      * ```typescript
@@ -493,9 +492,10 @@ class GalvaWithCreds {
       base64Payload: string,
     ): Promise<void> => {
       if (!this.credentials.playstore) {
-        throw new Error(
-          'Play Store credentials are required. Provide them in withCredentials().',
-        );
+        throw new GalvaError({
+          code: 'MISSING_CREDENTIALS',
+          message: 'Play Store credentials are required. Provide them in withCredentials().',
+        });
       }
 
       const decodedPayloadString = Buffer.from(base64Payload, 'base64').toString();
@@ -503,17 +503,24 @@ class GalvaWithCreds {
       try {
         decodedPayload = JSON.parse(decodedPayloadString);
       } catch (error) {
-        throw new Error('Invalid base64 payload: unable to parse JSON.');
+        throw new GalvaError({
+          code: 'INVALID_PAYLOAD',
+          message: 'Invalid base64 payload: unable to parse JSON.',
+        });
       }
 
       if (!decodedPayload || typeof decodedPayload !== 'object') {
-        throw new Error('Decoded payload is not a valid JSON object.');
+        throw new GalvaError({
+          code: 'INVALID_PAYLOAD',
+          message: 'Decoded payload is not a valid JSON object.',
+        });
       }
 
       if (!('subscriptionNotification' in decodedPayload)) {
-        throw new Error(
-          'Decoded payload does not contain subscriptionNotification field.',
-        );
+        throw new GalvaError({
+          code: 'INVALID_PAYLOAD',
+          message: 'Decoded payload does not contain subscriptionNotification field.',
+        });
       }
 
       const subscription = await PlaystoreService.getSubscription(
@@ -545,7 +552,7 @@ class GalvaWithCreds {
      * @param {string} rawBody - Raw request body from Paddle webhook
      * @param {string} signature - Signature from the Paddle-Signature header
      * @returns {Promise<void>}
-     * @throws {Error} If paddle credentials were not provided in withCredentials()
+     * @throws {GalvaError} If paddle credentials were not provided or API request fails
      *
      * @example
      * ```typescript
@@ -558,9 +565,10 @@ class GalvaWithCreds {
       signature: string,
     ): Promise<void> => {
       if (!this.credentials.paddle) {
-        throw new Error(
-          'Paddle credentials are required. Provide them in withCredentials().',
-        );
+        throw new GalvaError({
+          code: 'MISSING_CREDENTIALS',
+          message: 'Paddle credentials are required. Provide them in withCredentials().',
+        });
       }
 
       const paddle = new Paddle(this.credentials.paddle.apiKey);
@@ -573,9 +581,10 @@ class GalvaWithCreds {
           signature,
         );
       } catch (error) {
-        throw new Error(
-          `Invalid Paddle webhook data: ${(error as Error).message}`,
-        );
+        throw new GalvaError({
+          code: 'INVALID_WEBHOOK',
+          message: `Invalid Paddle webhook data: ${(error as Error).message}`,
+        });
       }
 
       await this.sendRequest('POST', '/endUsers/billingEvents', {
