@@ -1,6 +1,19 @@
-import { PlaystoreDeveloperNotification } from './types/playstore';
-import { PlaystoreService } from './services/playstore';
-import { EventEntity, Paddle } from '@paddle/paddle-node-sdk';
+import { PlaystoreDeveloperNotification } from "./types/playstore";
+import { PlaystoreService } from "./services/playstore";
+import { EventEntity, Paddle } from "@paddle/paddle-node-sdk";
+import type { EndUserTraits, EndUserDefaultInfo } from "./types/endUser";
+import { END_USER_DEFAULT_INFO_TO_TRAIT_MAP } from "./types/endUser";
+
+export type {
+  EndUserDefaultTraits,
+  EndUserTraits,
+  EndUserDefaultInfo,
+} from "./types/endUser";
+export {
+  EndUserDefaultTraitName,
+  END_USER_DEFAULT_TRAIT_MAP,
+  END_USER_DEFAULT_INFO_TO_TRAIT_MAP,
+} from "./types/endUser";
 
 export interface GalvaOptions {
   /**
@@ -9,7 +22,7 @@ export interface GalvaOptions {
    * @type {('production' | 'development')}
    * @memberof GalvaOptions
    */
-  environment?: 'production' | 'development';
+  environment?: "production" | "development";
 
   /**
    * API key retrieved from  Galva dashboard. Can also be set via GALVA_API_KEY environment variable.
@@ -54,8 +67,8 @@ export interface PaddleCredentials {
   signature: string;
 }
 
-const PRODUCTION_API_URL = 'https://api.galva.dev';
-const DEVELOPMENT_API_URL = 'https://api.galva.dev';
+const PRODUCTION_API_URL = "https://api.galva.io";
+const DEVELOPMENT_API_URL = "https://api.galva.dev";
 
 /**
  * Galva SDK client for tracking billing events from various payment platforms.
@@ -87,7 +100,7 @@ export class Galva {
     const apiKey = options?.apiKey || process.env.GALVA_API_KEY;
     if (!apiKey) {
       throw new Error(
-        'API key is required. Provide it in options or set GALVA_API_KEY env variable.',
+        "API key is required. Provide it in options or set GALVA_API_KEY env variable.",
       );
     }
 
@@ -95,17 +108,17 @@ export class Galva {
       apiKey: apiKey,
       environment:
         options?.environment ||
-        (process.env.NODE_ENV === 'development' ? 'development' : 'production'),
+        (process.env.NODE_ENV === "development" ? "development" : "production"),
       timeout: options?.timeout || 10000,
     };
     this.baseUrl =
-      this.config.environment === 'development'
+      this.config.environment === "development"
         ? DEVELOPMENT_API_URL
         : PRODUCTION_API_URL;
   }
 
   private async sendRequest(
-    method: 'POST' | 'GET',
+    method: "POST" | "GET",
     endpoint: string,
     data?: unknown,
   ): Promise<void> {
@@ -118,8 +131,8 @@ export class Galva {
       const response = await fetch(url, {
         method,
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.config.apiKey}`,
+          "Content-Type": "application/json",
+          "x-api-key": this.config.apiKey!,
         },
         body: data ? JSON.stringify(data) : undefined,
         signal: controller.signal,
@@ -157,31 +170,31 @@ export class Galva {
     base64OrPayload: string | PlaystoreDeveloperNotification,
     credentials?: PlaystoreCredentials,
   ): Promise<void> {
-    if (typeof base64OrPayload === 'string') {
+    if (typeof base64OrPayload === "string") {
       if (!credentials) {
         throw new Error(
-          'Credentials are required when payload is provided as base64 string.',
+          "Credentials are required when payload is provided as base64 string.",
         );
       }
 
       const decodedPayloadString = Buffer.from(
         base64OrPayload,
-        'base64',
+        "base64",
       ).toString();
       let decodedPayload: PlaystoreDeveloperNotification | null = null;
       try {
         decodedPayload = JSON.parse(decodedPayloadString);
       } catch (error) {
-        throw new Error('Invalid base64 payload: unable to parse JSON.');
+        throw new Error("Invalid base64 payload: unable to parse JSON.");
       }
 
-      if (!decodedPayload || typeof decodedPayload !== 'object') {
-        throw new Error('Decoded payload is not a valid JSON object.');
+      if (!decodedPayload || typeof decodedPayload !== "object") {
+        throw new Error("Decoded payload is not a valid JSON object.");
       }
 
-      if (!('subscriptionNotification' in decodedPayload)) {
+      if (!("subscriptionNotification" in decodedPayload)) {
         throw new Error(
-          'Decoded payload does not contain subscriptionNotification field.',
+          "Decoded payload does not contain subscriptionNotification field.",
         );
       }
 
@@ -199,8 +212,8 @@ export class Galva {
         },
       };
 
-      await this.sendRequest('POST', '/endUsers/billingEvents', {
-        platform: 'playstore',
+      await this.sendRequest("POST", "/endUsers/billingEvents", {
+        platform: "playstore",
         endUserId,
         payload: finalPayload,
       });
@@ -223,10 +236,10 @@ export class Galva {
   ): Promise<void> {
     let eventData: EventEntity;
 
-    if (typeof rawBodyOrEvent === 'string') {
+    if (typeof rawBodyOrEvent === "string") {
       if (!auth) {
         throw new Error(
-          'Auth credentials are required when payload is provided as signed body.',
+          "Auth credentials are required when payload is provided as signed body.",
         );
       }
 
@@ -246,8 +259,8 @@ export class Galva {
       eventData = rawBodyOrEvent;
     }
 
-    await this.sendRequest('POST', '/endUsers/billingEvents', {
-      platform: 'paddle',
+    await this.sendRequest("POST", "/endUsers/billingEvents", {
+      platform: "paddle",
       endUserId,
       payload: eventData,
     });
@@ -291,8 +304,8 @@ export class Galva {
     ): Promise<{ success: boolean; error?: string }> => {
       try {
         const { signedPayload, bundleId, appAppleId } = payload;
-        await this.sendRequest('POST', '/endUsers/billingEvents', {
-          platform: 'appstore',
+        await this.sendRequest("POST", "/endUsers/billingEvents", {
+          platform: "appstore",
           endUserId,
           payload: {
             signedPayload,
@@ -304,7 +317,7 @@ export class Galva {
         });
         return { success: true };
       } catch (error) {
-        console.error('Error syncing App Store event:', error);
+        console.error("Error syncing App Store event:", error);
         return { success: false, error: (error as Error).message };
       }
     },
@@ -365,5 +378,100 @@ export class Galva {
      * ```
      */
     paddle: this._paddle.bind(this),
+  };
+
+  /**
+   * End user management methods.
+   */
+  public endUser = {
+    /**
+     * Identifies an end user with optional traits and context.
+     *
+     * @param {string} endUserId - Unique identifier for the end user in your system
+     * @param {Object} [options] - Optional identification data
+     * @param {string} [options.timestamp] - ISO 8601 timestamp of when the identification occurred
+     * @param {Record<string, any>} [options.context] - Additional context about the identification
+     * @param {EndUserTraits} [options.traits] - User traits/attributes to associate with the user. Use EndUserDefaultTraitName enum for built-in traits.
+     * @returns {Promise<{ success: boolean; error?: string }>} Result object indicating success or failure
+     * @example
+     * ```typescript
+     * import { EndUserDefaultTraitName } from 'galva';
+     *
+     * const result = await galva.endUser.identify('user-123', {
+     *   timestamp: new Date().toISOString(),
+     *   traits: {
+     *     [EndUserDefaultTraitName.EMAIL]: 'user@example.com',
+     *     [EndUserDefaultTraitName.FULL_NAME]: 'John Doe',
+     *     plan: 'premium', // custom trait
+     *   },
+     *   context: { source: 'web-app' }
+     * });
+     * ```
+     */
+    identify: async (
+      endUserId: string,
+      options?: {
+        timestamp?: string;
+        context?: Record<string, any>;
+        traits?: EndUserTraits;
+      },
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        await this.sendRequest("POST", "/endUsers:identify", {
+          endUserId,
+          timestamp: options?.timestamp,
+          context: options?.context,
+          traits: options?.traits,
+        });
+        return { success: true };
+      } catch (error) {
+        console.error("Error identifying end user:", error);
+        return { success: false, error: (error as Error).message };
+      }
+    },
+
+    /**
+     * Updates an end user's default profile info (default traits).
+     *
+     * @param {string} endUserId - Unique identifier for the end user in your system
+     * @param {EndUserDefaultInfo} defaultInfo - User profile info to update
+     * @returns {Promise<{ success: boolean; error?: string }>} Result object indicating success or failure
+     * @example
+     * ```typescript
+     * const result = await galva.endUser.updateDefaultInfo('user-123', {
+     *   email: 'user@example.com',
+     *   fullName: 'John Doe',
+     *   country: 'US',
+     *   timezone: 'America/New_York',
+     * });
+     * ```
+     */
+    updateDefaultInfo: async (
+      endUserId: string,
+      defaultInfo: EndUserDefaultInfo,
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const traits: EndUserTraits = {};
+
+        for (const [key, value] of Object.entries(defaultInfo)) {
+          if (value !== undefined) {
+            const traitName =
+              END_USER_DEFAULT_INFO_TO_TRAIT_MAP[
+                key as keyof EndUserDefaultInfo
+              ];
+            traits[traitName] = value;
+          }
+        }
+
+        await this.sendRequest("POST", "/endUsers:identify", {
+          endUserId,
+          traits,
+        });
+        return { success: true };
+      } catch (error) {
+        console.error("Error updating end user default info:", error);
+        return { success: false, error: (error as Error).message };
+      }
+    },
   };
 }
