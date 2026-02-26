@@ -50,8 +50,32 @@ export interface PaddleCredentials {
   apiKey: string;
   /** Webhook secret key for signature verification */
   secretKey: string;
-  /** Signature from the Paddle-Signature header */
-  signature: string;
+}
+
+/**
+ * Credentials for Apple App Store.
+ *
+ * @interface AppstoreCredentials
+ */
+export interface AppstoreCredentials {
+  /** The app's bundle identifier (e.g., 'com.example.app') */
+  bundleId: string;
+  /** The app's Apple ID from App Store Connect */
+  appAppleId: number;
+}
+
+/**
+ * Credentials configuration for withCredentials method.
+ *
+ * @interface CredentialsConfig
+ */
+export interface CredentialsConfig {
+  /** App Store credentials */
+  appstore?: AppstoreCredentials;
+  /** Play Store service account credentials */
+  playstore?: PlaystoreCredentials;
+  /** Paddle API credentials */
+  paddle?: PaddleCredentials;
 }
 
 const PRODUCTION_API_URL = 'https://api.galva.dev';
@@ -59,6 +83,7 @@ const DEVELOPMENT_API_URL = 'https://api.galva.dev';
 
 /**
  * Galva SDK client for tracking billing events from various payment platforms.
+ * Use this class when you have already decoded/verified payloads.
  *
  * @class Galva
  * @example
@@ -71,11 +96,17 @@ const DEVELOPMENT_API_URL = 'https://api.galva.dev';
  *   bundleId: 'com.example.app',
  *   appAppleId: 123456789
  * });
+ *
+ * // Track a Play Store billing event with decoded payload
+ * await galva.billingEvent.playstore('user-123', decodedNotification);
+ *
+ * // Track a Paddle billing event with verified event
+ * await galva.billingEvent.paddle('user-123', verifiedEvent);
  * ```
  */
 export class Galva {
-  private config: GalvaOptions;
-  private readonly baseUrl: string;
+  protected config: GalvaOptions;
+  protected readonly baseUrl: string;
 
   /**
    * Creates a new Galva client instance.
@@ -104,7 +135,7 @@ export class Galva {
         : PRODUCTION_API_URL;
   }
 
-  private async sendRequest(
+  protected async sendRequest(
     method: 'POST' | 'GET',
     endpoint: string,
     data?: unknown,
@@ -141,124 +172,46 @@ export class Galva {
     }
   }
 
-  private _playstore(
-    endUserId: string,
-    base64Payload: string,
-    credentials: PlaystoreCredentials,
-  ): Promise<void>;
-
-  private _playstore(
-    endUserId: string,
-    payload: PlaystoreDeveloperNotification,
-  ): Promise<void>;
-
-  private async _playstore(
-    endUserId: string,
-    base64OrPayload: string | PlaystoreDeveloperNotification,
-    credentials?: PlaystoreCredentials,
-  ): Promise<void> {
-    if (typeof base64OrPayload === 'string') {
-      if (!credentials) {
-        throw new Error(
-          'Credentials are required when payload is provided as base64 string.',
-        );
-      }
-
-      const decodedPayloadString = Buffer.from(
-        base64OrPayload,
-        'base64',
-      ).toString();
-      let decodedPayload: PlaystoreDeveloperNotification | null = null;
-      try {
-        decodedPayload = JSON.parse(decodedPayloadString);
-      } catch (error) {
-        throw new Error('Invalid base64 payload: unable to parse JSON.');
-      }
-
-      if (!decodedPayload || typeof decodedPayload !== 'object') {
-        throw new Error('Decoded payload is not a valid JSON object.');
-      }
-
-      if (!('subscriptionNotification' in decodedPayload)) {
-        throw new Error(
-          'Decoded payload does not contain subscriptionNotification field.',
-        );
-      }
-
-      const subscription = await PlaystoreService.getSubscription(
-        decodedPayload.subscriptionNotification.purchaseToken,
-        decodedPayload.packageName,
-        credentials,
-      );
-
-      const finalPayload: PlaystoreDeveloperNotification = {
-        ...decodedPayload,
-        subscriptionNotification: {
-          ...decodedPayload.subscriptionNotification,
-          subscriptionPurchase: subscription.data,
-        },
-      };
-
-      await this.sendRequest('POST', '/endUsers/billingEvents', {
-        platform: 'playstore',
-        endUserId,
-        payload: finalPayload,
-      });
-    } else {
-    }
-  }
-
-  private _paddle(
-    endUserId: string,
-    rawBody: string,
-    auth: PaddleCredentials,
-  ): Promise<void>;
-
-  private _paddle(endUserId: string, eventEntity: EventEntity): Promise<void>;
-
-  private async _paddle(
-    endUserId: string,
-    rawBodyOrEvent: string | EventEntity,
-    auth?: PaddleCredentials,
-  ): Promise<void> {
-    let eventData: EventEntity;
-
-    if (typeof rawBodyOrEvent === 'string') {
-      if (!auth) {
-        throw new Error(
-          'Auth credentials are required when payload is provided as signed body.',
-        );
-      }
-
-      const paddle = new Paddle(auth.apiKey);
-      try {
-        eventData = await paddle.webhooks.unmarshal(
-          rawBodyOrEvent,
-          auth.secretKey,
-          auth.signature,
-        );
-      } catch (error) {
-        throw new Error(
-          `Invalid Paddle webhook data: ${(error as Error).message}`,
-        );
-      }
-    } else {
-      eventData = rawBodyOrEvent;
-    }
-
-    await this.sendRequest('POST', '/endUsers/billingEvents', {
-      platform: 'paddle',
-      endUserId,
-      payload: eventData,
-    });
+  /**
+   * Creates a GalvaWithCreds instance with pre-configured credentials.
+   * Use this when you want to pass raw payloads that need decoding/verification.
+   *
+   * @param {CredentialsConfig} credentials - Credentials for various platforms
+   * @returns {GalvaWithCreds} A new GalvaWithCreds instance
+   *
+   * @example
+   * ```typescript
+   * const galvaWithCreds = galva.withCredentials({
+   *   appstore: {
+   *     bundleId: 'com.example.app',
+   *     appAppleId: 123456789
+   *   },
+   *   playstore: {
+   *     email: 'service-account@project.iam.gserviceaccount.com',
+   *     key: '-----BEGIN PRIVATE KEY-----\n...'
+   *   },
+   *   paddle: {
+   *     apiKey: 'your-paddle-api-key',
+   *     secretKey: 'your-webhook-secret'
+   *   }
+   * });
+   *
+   * // Now use raw payloads
+   * await galvaWithCreds.billingEvent.appstore('user-123', signedPayload);
+   * await galvaWithCreds.billingEvent.playstore('user-123', base64Payload);
+   * await galvaWithCreds.billingEvent.paddle('user-123', rawBody, signature);
+   * ```
+   */
+  public withCredentials(credentials: CredentialsConfig): GalvaWithCreds {
+    return new GalvaWithCreds(this.config, this.baseUrl, credentials);
   }
 
   /**
    * Billing event handlers for different payment platforms.
    *
    * @property {Function} appstore - Handle Apple App Store billing events
-   * @property {Function} playstore - Handle Google Play Store billing events
-   * @property {Function} paddle - Handle Paddle billing events
+   * @property {Function} playstore - Handle Google Play Store billing events (decoded payload)
+   * @property {Function} paddle - Handle Paddle billing events (verified event)
    */
   public billingEvent = {
     /**
@@ -311,59 +264,303 @@ export class Galva {
 
     /**
      * Tracks a Google Play Store billing event for a specific end user.
+     * Use this method when you have an already-decoded developer notification.
      *
-     * @overload
      * @param {string} endUserId - Unique identifier for the end user in your system
-     * @param {string} base64Payload - Base64-encoded payload from Google Pub/Sub
-     * @param {PlaystoreCredentials} credentials - Service account credentials for Play Store API
-     * @returns {Promise<void>}
-     *
-     * @overload
-     * @param {string} endUserId - Unique identifier for the end user in your system
-     * @param {PlaystoreDeveloperNotification} payload - Already-decoded developer notification object
+     * @param {PlaystoreDeveloperNotification} payload - Decoded developer notification object
      * @returns {Promise<void>}
      *
      * @example
      * ```typescript
-     * // Using base64 payload from Pub/Sub
-     * await galva.billingEvent.playstore('user-123', base64Payload, {
-     *   email: 'service-account@project.iam.gserviceaccount.com',
-     *   key: '-----BEGIN PRIVATE KEY-----\n...'
-     * });
-     *
-     * // Using already-decoded notification
      * await galva.billingEvent.playstore('user-123', decodedNotification);
      * ```
      */
-    playstore: this._playstore.bind(this),
+    playstore: async (
+      endUserId: string,
+      payload: PlaystoreDeveloperNotification,
+    ): Promise<void> => {
+      await this.sendRequest('POST', '/endUsers/billingEvents', {
+        platform: 'playstore',
+        endUserId,
+        payload,
+      });
+    },
 
     /**
      * Tracks a Paddle billing event for a specific end user.
+     * Use this method when you have an already-verified Paddle event entity.
      *
-     * @overload
-     * @param {string} endUserId - Unique identifier for the end user in your system
-     * @param {string} rawBody - Raw request body from Paddle webhook
-     * @param {PaddleCredentials} auth - Paddle API credentials for webhook verification
-     * @returns {Promise<void>}
-     *
-     * @overload
      * @param {string} endUserId - Unique identifier for the end user in your system
      * @param {EventEntity} eventEntity - Already-verified Paddle event entity
      * @returns {Promise<void>}
      *
      * @example
      * ```typescript
-     * // Using raw webhook body
-     * await galva.billingEvent.paddle('user-123', rawBody, {
-     *   apiKey: 'your-paddle-api-key',
-     *   secretKey: 'your-webhook-secret',
-     *   signature: req.headers['paddle-signature']
-     * });
-     *
-     * // Using already-verified event
      * await galva.billingEvent.paddle('user-123', verifiedEvent);
      * ```
      */
-    paddle: this._paddle.bind(this),
+    paddle: async (
+      endUserId: string,
+      eventEntity: EventEntity,
+    ): Promise<void> => {
+      await this.sendRequest('POST', '/endUsers/billingEvents', {
+        platform: 'paddle',
+        endUserId,
+        payload: eventEntity,
+      });
+    },
+  };
+}
+
+/**
+ * Galva SDK client with pre-configured credentials for tracking billing events.
+ * Use this class when you need to pass raw payloads that require decoding/verification.
+ * Obtain an instance via `galva.withCredentials(...)`.
+ *
+ * @class GalvaWithCreds
+ * @example
+ * ```typescript
+ * const galvaWithCreds = new Galva({ apiKey: 'your-api-key' }).withCredentials({
+ *   appstore: {
+ *     bundleId: 'com.example.app',
+ *     appAppleId: 123456789
+ *   },
+ *   playstore: {
+ *     email: 'service-account@project.iam.gserviceaccount.com',
+ *     key: '-----BEGIN PRIVATE KEY-----\n...'
+ *   },
+ *   paddle: {
+ *     apiKey: 'your-paddle-api-key',
+ *     secretKey: 'your-webhook-secret'
+ *   }
+ * });
+ *
+ * // Track an App Store billing event with signed payload
+ * await galvaWithCreds.billingEvent.appstore('user-123', signedPayload);
+ *
+ * // Track a Play Store billing event with base64 payload
+ * await galvaWithCreds.billingEvent.playstore('user-123', base64Payload);
+ *
+ * // Track a Paddle billing event with raw body
+ * await galvaWithCreds.billingEvent.paddle('user-123', rawBody, signature);
+ * ```
+ */
+class GalvaWithCreds {
+  private config: GalvaOptions;
+  private readonly baseUrl: string;
+  private credentials: CredentialsConfig;
+
+  /**
+   * Creates a new GalvaWithCreds client instance.
+   * This constructor is internal - use `galva.withCredentials(...)` instead.
+   *
+   * @internal
+   */
+  constructor(config: GalvaOptions, baseUrl: string, credentials: CredentialsConfig) {
+    this.config = config;
+    this.baseUrl = baseUrl;
+    this.credentials = credentials;
+  }
+
+  private async sendRequest(
+    method: 'POST' | 'GET',
+    endpoint: string,
+    data?: unknown,
+  ): Promise<void> {
+    const url = `${this.baseUrl}${endpoint}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.config.apiKey}`,
+        },
+        body: data ? JSON.stringify(data) : undefined,
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(
+          `Galva API error: ${response.status} ${response.statusText} - ${errorBody}`,
+        );
+      } else {
+        const responseData = await response.json();
+        if (responseData.error) {
+          throw new Error(`Galva API error: ${responseData.error}`);
+        }
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Billing event handlers for different payment platforms with credential support.
+   *
+   * @property {Function} appstore - Handle Apple App Store billing events (signed payload only)
+   * @property {Function} playstore - Handle Google Play Store billing events (raw base64 payload)
+   * @property {Function} paddle - Handle Paddle billing events (raw body with verification)
+   */
+  public billingEvent = {
+    /**
+     * Tracks an Apple App Store billing event for a specific end user.
+     * Uses the bundleId and appAppleId from withCredentials().
+     *
+     * @param {string} endUserId - Unique identifier for the end user in your system
+     * @param {string} signedPayload - The signed payload from Apple's server notification
+     * @param {Record<string, any>} [options] - Additional options to pass with the request
+     * @returns {Promise<{ success: boolean; error?: string }>} Result object indicating success or failure
+     * @throws {Error} If appstore credentials were not provided in withCredentials()
+     *
+     * @example
+     * ```typescript
+     * await galvaWithCreds.billingEvent.appstore('user-123', signedPayload);
+     * ```
+     */
+    appstore: async (
+      endUserId: string,
+      signedPayload: string,
+      options?: Record<string, any>,
+    ): Promise<{ success: boolean; error?: string }> => {
+      if (!this.credentials.appstore) {
+        throw new Error(
+          'App Store credentials are required. Provide them in withCredentials().',
+        );
+      }
+
+      try {
+        await this.sendRequest('POST', '/endUsers/billingEvents', {
+          platform: 'appstore',
+          endUserId,
+          payload: {
+            signedPayload,
+            appAppleId: this.credentials.appstore.appAppleId,
+            bundleId: this.credentials.appstore.bundleId,
+            env: this.config.environment,
+          },
+          options,
+        });
+        return { success: true };
+      } catch (error) {
+        console.error('Error syncing App Store event:', error);
+        return { success: false, error: (error as Error).message };
+      }
+    },
+
+    /**
+     * Tracks a Google Play Store billing event for a specific end user.
+     * Decodes the base64 payload and fetches subscription details from Play Store API.
+     *
+     * @param {string} endUserId - Unique identifier for the end user in your system
+     * @param {string} base64Payload - Base64-encoded payload from Google Pub/Sub
+     * @returns {Promise<void>}
+     * @throws {Error} If playstore credentials were not provided in withCredentials()
+     *
+     * @example
+     * ```typescript
+     * await galvaWithCreds.billingEvent.playstore('user-123', base64Payload);
+     * ```
+     */
+    playstore: async (
+      endUserId: string,
+      base64Payload: string,
+    ): Promise<void> => {
+      if (!this.credentials.playstore) {
+        throw new Error(
+          'Play Store credentials are required. Provide them in withCredentials().',
+        );
+      }
+
+      const decodedPayloadString = Buffer.from(base64Payload, 'base64').toString();
+      let decodedPayload: PlaystoreDeveloperNotification | null = null;
+      try {
+        decodedPayload = JSON.parse(decodedPayloadString);
+      } catch (error) {
+        throw new Error('Invalid base64 payload: unable to parse JSON.');
+      }
+
+      if (!decodedPayload || typeof decodedPayload !== 'object') {
+        throw new Error('Decoded payload is not a valid JSON object.');
+      }
+
+      if (!('subscriptionNotification' in decodedPayload)) {
+        throw new Error(
+          'Decoded payload does not contain subscriptionNotification field.',
+        );
+      }
+
+      const subscription = await PlaystoreService.getSubscription(
+        decodedPayload.subscriptionNotification.purchaseToken,
+        decodedPayload.packageName,
+        this.credentials.playstore,
+      );
+
+      const finalPayload: PlaystoreDeveloperNotification = {
+        ...decodedPayload,
+        subscriptionNotification: {
+          ...decodedPayload.subscriptionNotification,
+          subscriptionPurchase: subscription.data,
+        },
+      };
+
+      await this.sendRequest('POST', '/endUsers/billingEvents', {
+        platform: 'playstore',
+        endUserId,
+        payload: finalPayload,
+      });
+    },
+
+    /**
+     * Tracks a Paddle billing event for a specific end user.
+     * Verifies the webhook signature and unmarshals the event.
+     *
+     * @param {string} endUserId - Unique identifier for the end user in your system
+     * @param {string} rawBody - Raw request body from Paddle webhook
+     * @param {string} signature - Signature from the Paddle-Signature header
+     * @returns {Promise<void>}
+     * @throws {Error} If paddle credentials were not provided in withCredentials()
+     *
+     * @example
+     * ```typescript
+     * await galvaWithCreds.billingEvent.paddle('user-123', rawBody, req.headers['paddle-signature']);
+     * ```
+     */
+    paddle: async (
+      endUserId: string,
+      rawBody: string,
+      signature: string,
+    ): Promise<void> => {
+      if (!this.credentials.paddle) {
+        throw new Error(
+          'Paddle credentials are required. Provide them in withCredentials().',
+        );
+      }
+
+      const paddle = new Paddle(this.credentials.paddle.apiKey);
+      let eventData: EventEntity;
+
+      try {
+        eventData = await paddle.webhooks.unmarshal(
+          rawBody,
+          this.credentials.paddle.secretKey,
+          signature,
+        );
+      } catch (error) {
+        throw new Error(
+          `Invalid Paddle webhook data: ${(error as Error).message}`,
+        );
+      }
+
+      await this.sendRequest('POST', '/endUsers/billingEvents', {
+        platform: 'paddle',
+        endUserId,
+        payload: eventData,
+      });
+    },
   };
 }
