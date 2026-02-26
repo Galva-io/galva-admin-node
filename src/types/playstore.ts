@@ -1,3 +1,5 @@
+import { androidpublisher_v3 } from 'googleapis';
+
 export interface PlaystoreOneTimeProductNotification {
   version: string;
   notificationType: number;
@@ -148,7 +150,7 @@ export interface PlaystoreSubscriptionNotification {
   version: string;
   notificationType: number;
   purchaseToken: string;
-  subscriptionPurchase: PlaystoreSubscriptionPurchaseV2;
+  subscriptionPurchase: androidpublisher_v3.Schema$SubscriptionPurchaseV2;
 }
 
 export interface PlaystoreTestNotification {
