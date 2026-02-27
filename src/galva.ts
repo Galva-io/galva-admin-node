@@ -1,45 +1,39 @@
-import { PlaystoreDeveloperNotification } from "./types/playstore";
-import { PlaystoreService } from "./services/playstore";
-import { EventEntity, Paddle } from "@paddle/paddle-node-sdk";
-import type { EndUserTraits, EndUserDefaultInfo } from "./types/endUser";
-import { END_USER_DEFAULT_INFO_TO_TRAIT_MAP } from "./types/endUser";
-import { GalvaError } from "./types/error";
+import { PlaystoreDeveloperNotification } from './types/playstore';
+import { PlaystoreService } from './services/playstore';
+import { EventEntity, Paddle } from '@paddle/paddle-node-sdk';
+import type { EndUserTraits, EndUserDefaultInfo } from './types/endUser';
+import { END_USER_DEFAULT_INFO_TO_TRAIT_MAP } from './types/endUser';
+import { GalvaError } from './types/error';
 
 export type {
   EndUserDefaultTraits,
   EndUserTraits,
   EndUserDefaultInfo,
-} from "./types/endUser";
+} from './types/endUser';
 export {
   EndUserDefaultTraitName,
   END_USER_DEFAULT_TRAIT_MAP,
   END_USER_DEFAULT_INFO_TO_TRAIT_MAP,
-} from "./types/endUser";
-export { GalvaError } from "./types/error";
-export type { GalvaErrorResponse } from "./types/error";
+} from './types/endUser';
+export { GalvaError } from './types/error';
+export type { GalvaErrorResponse } from './types/error';
 
 export interface GalvaOptions {
   /**
-   * Environment, can be defined as NODE_ENV or directly in options. Defaults to 'production'.
-   *
+   * Defaults to 'production'. Falls back to NODE_ENV.
    * @type {('production' | 'development')}
-   * @memberof GalvaOptions
    */
-  environment?: "production" | "development";
+  environment?: 'production' | 'development';
 
   /**
-   * API key retrieved from  Galva dashboard. Can also be set via GALVA_API_KEY environment variable.
-   *
+   * API key from Galva dashboard. Falls back to GALVA_API_KEY env var.
    * @type {string}
-   * @memberof GalvaOptions
    */
   apiKey?: string;
 
   /**
-   * Request timeout in milliseconds (optional, defaults to 10000ms)
-   *
+   * Request timeout in ms. Defaults to 10000.
    * @type {number}
-   * @memberof GalvaOptions
    */
   timeout?: number;
 }
@@ -94,49 +88,28 @@ export interface CredentialsConfig {
   paddle?: PaddleCredentials;
 }
 
-const PRODUCTION_API_URL = "https://api.galva.io";
-const DEVELOPMENT_API_URL = "https://api.galva.dev";
+const PRODUCTION_API_URL = 'https://api.galva.io';
+const DEVELOPMENT_API_URL = 'https://api.galva.dev';
 
 /**
- * Galva SDK client for tracking billing events from various payment platforms.
- * Use this class when you have already decoded/verified payloads.
- *
- * @class Galva
- * @example
- * ```typescript
- * const galva = new Galva({ apiKey: 'your-api-key' });
- *
- * // Track an App Store billing event
- * await galva.billingEvent.appstore('user-123', {
- *   signedPayload: '...',
- *   bundleId: 'com.example.app',
- *   appAppleId: 123456789
- * });
- *
- * // Track a Play Store billing event with decoded payload
- * await galva.billingEvent.playstore('user-123', decodedNotification);
- *
- * // Track a Paddle billing event with verified event
- * await galva.billingEvent.paddle('user-123', verifiedEvent);
- * ```
+ * Base Galva SDK client with end user management methods.
+ * @class GalvaBase
  */
-export class GalvaBase {
+class GalvaBase {
   protected config: GalvaOptions;
   protected readonly baseUrl: string;
 
   /**
-   * Creates a new Galva client instance.
-   *
-   * @param {GalvaOptions} [options] - Configuration options for the Galva client
-   * @throws {Error} Throws if API key is not provided in options or GALVA_API_KEY environment variable
+   * @param {GalvaOptions} [options] - Configuration options
+   * @throws {GalvaError} If API key is not provided
    */
   constructor(options?: GalvaOptions) {
     const apiKey = options?.apiKey || process.env.GALVA_API_KEY;
     if (!apiKey) {
       throw new GalvaError({
-        code: "MISSING_API_KEY",
+        code: 'MISSING_API_KEY',
         message:
-          "API key is required. Provide it in options or set GALVA_API_KEY env variable.",
+          'API key is required. Provide it in options or set GALVA_API_KEY env variable.',
       });
     }
 
@@ -144,17 +117,17 @@ export class GalvaBase {
       apiKey: apiKey,
       environment:
         options?.environment ||
-        (process.env.NODE_ENV === "development" ? "development" : "production"),
+        (process.env.NODE_ENV === 'development' ? 'development' : 'production'),
       timeout: options?.timeout || 10000,
     };
     this.baseUrl =
-      this.config.environment === "development"
+      this.config.environment === 'development'
         ? DEVELOPMENT_API_URL
         : PRODUCTION_API_URL;
   }
 
   protected async sendRequest(
-    method: "POST" | "GET",
+    method: 'POST' | 'GET',
     endpoint: string,
     data?: unknown,
   ): Promise<void> {
@@ -167,8 +140,8 @@ export class GalvaBase {
       const response = await fetch(url, {
         method,
         headers: {
-          "Content-Type": "application/json",
-          "x-api-key": this.config.apiKey!,
+          'Content-Type': 'application/json',
+          'x-api-key': this.config.apiKey!,
         },
         body: data ? JSON.stringify(data) : undefined,
         signal: controller.signal,
@@ -182,9 +155,9 @@ export class GalvaBase {
       if (error instanceof GalvaError) {
         throw error;
       }
-      if (error instanceof Error && error.name === "AbortError") {
+      if (error instanceof Error && error.name === 'AbortError') {
         throw new GalvaError({
-          code: "TIMEOUT",
+          code: 'TIMEOUT',
           message: `Request timed out after ${this.config.timeout}ms`,
         });
       }
@@ -194,38 +167,21 @@ export class GalvaBase {
     }
   }
 
-  /**
-   * End user management methods.
-   */
+  /** End user management methods. */
   public endUser = {
     /**
      * Identifies an end user with optional traits and context.
-     *
-     * @param {string} endUserId - Unique identifier for the end user in your system
-     * @param {Object} [options] - Optional identification data
-     * @param {string} [options.timestamp] - ISO 8601 timestamp of when the identification occurred
-     * @param {Record<string, any>} [options.context] - Additional context about the identification
-     * @param {EndUserTraits} [options.traits] - User traits/attributes to associate with the user. Use EndUserDefaultTraitName enum for built-in traits.
-     * @throws {GalvaError} Throws if the API request fails
+     * @param {string} endUserId - End user ID in your system
+     * @param {Object} [options] - Identification data
+     * @param {string} [options.timestamp] - ISO 8601 timestamp
+     * @param {Record<string, any>} [options.context] - Additional context
+     * @param {EndUserTraits} [options.traits] - User traits. Use EndUserDefaultTraitName for built-in traits.
+     * @throws {GalvaError} If API request fails
      * @example
      * ```typescript
-     * import { EndUserDefaultTraitName, GalvaError } from 'galva';
-     *
-     * try {
-     *   await galva.endUser.identify('user-123', {
-     *     timestamp: new Date().toISOString(),
-     *     traits: {
-     *       [EndUserDefaultTraitName.EMAIL]: 'user@example.com',
-     *       [EndUserDefaultTraitName.FULL_NAME]: 'John Doe',
-     *       plan: 'premium', // custom trait
-     *     },
-     *     context: { source: 'web-app' }
-     *   });
-     * } catch (error) {
-     *   if (error instanceof GalvaError) {
-     *     console.error(error.code, error.message);
-     *   }
-     * }
+     * await galva.endUser.identify('user-123', {
+     *   traits: { [EndUserDefaultTraitName.EMAIL]: 'user@example.com' },
+     * });
      * ```
      */
     identify: async (
@@ -236,7 +192,7 @@ export class GalvaBase {
         traits?: EndUserTraits;
       },
     ): Promise<void> => {
-      await this.sendRequest("POST", "/endUsers:identify", {
+      await this.sendRequest('POST', '/endUsers:identify', {
         endUserId,
         timestamp: options?.timestamp,
         context: options?.context,
@@ -245,27 +201,16 @@ export class GalvaBase {
     },
 
     /**
-     * Updates an end user's default profile info (default traits).
-     *
-     * @param {string} endUserId - Unique identifier for the end user in your system
-     * @param {EndUserDefaultInfo} defaultInfo - User profile info to update
-     * @throws {GalvaError} Throws if the API request fails
+     * Updates an end user's default profile info.
+     * @param {string} endUserId - End user ID in your system
+     * @param {EndUserDefaultInfo} defaultInfo - Profile info to update
+     * @throws {GalvaError} If API request fails
      * @example
      * ```typescript
-     * import { GalvaError } from 'galva';
-     *
-     * try {
-     *   await galva.endUser.updateDefaultInfo('user-123', {
-     *     email: 'user@example.com',
-     *     fullName: 'John Doe',
-     *     country: 'US',
-     *     timezone: 'America/New_York',
-     *   });
-     * } catch (error) {
-     *   if (error instanceof GalvaError) {
-     *     console.error(error.code, error.message);
-     *   }
-     * }
+     * await galva.endUser.updateDefaultInfo('user-123', {
+     *   email: 'user@example.com',
+     *   fullName: 'John Doe',
+     * });
      * ```
      */
     updateDefaultInfo: async (
@@ -282,7 +227,7 @@ export class GalvaBase {
         }
       }
 
-      await this.sendRequest("POST", "/endUsers:identify", {
+      await this.sendRequest('POST', '/endUsers:identify', {
         endUserId,
         traits,
       });
@@ -290,359 +235,13 @@ export class GalvaBase {
   };
 }
 
-/**
- * Galva SDK client for tracking billing events from various payment platforms.
- * Use this class when you have already decoded/verified payloads.
- *
- * @class Galva
- * @example
- * ```typescript
- * const galva = new Galva({ apiKey: 'your-api-key' });
- *
- * // Track an App Store billing event
- * await galva.billingEvent.appstore('user-123', {
- *   signedPayload: '...',
- *   bundleId: 'com.example.app',
- *   appAppleId: 123456789
- * });
- *
- * // Track a Play Store billing event with decoded payload
- * await galva.billingEvent.playstore('user-123', decodedNotification);
- *
- * // Track a Paddle billing event with verified event
- * await galva.billingEvent.paddle('user-123', verifiedEvent);
- * ```
- */
-export class GalvaWithoutCreds extends GalvaBase {
-  /**
-   * Creates a new Galva client instance.
-   *
-   * @param {GalvaOptions} [options] - Configuration options for the Galva client
-   * @throws {Error} Throws if API key is not provided in options or GALVA_API_KEY environment variable
-   */
-  constructor(options?: GalvaOptions) {
-    super(options);
-  }
-
-  protected async sendRequest(
-    method: "POST" | "GET",
-    endpoint: string,
-    data?: unknown,
-  ): Promise<void> {
-    const url = `${this.baseUrl}${endpoint}`;
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
-
-    try {
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": this.config.apiKey!,
-        },
-        body: data ? JSON.stringify(data) : undefined,
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const errorResponse = await response.json();
-        throw new GalvaError(errorResponse);
-      }
-    } catch (error) {
-      if (error instanceof GalvaError) {
-        throw error;
-      }
-      if (error instanceof Error && error.name === "AbortError") {
-        throw new GalvaError({
-          code: "TIMEOUT",
-          message: `Request timed out after ${this.config.timeout}ms`,
-        });
-      }
-      throw GalvaError.from(error);
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
-  // /**
-  //  * Creates a GalvaWithCreds instance with pre-configured credentials.
-  //  * Use this when you want to pass raw payloads that need decoding/verification.
-  //  *
-  //  * @param {CredentialsConfig} credentials - Credentials for various platforms
-  //  * @returns {GalvaWithCreds} A new GalvaWithCreds instance
-  //  *
-  //  * @example
-  //  * ```typescript
-  //  * const galvaWithCreds = galva.withCredentials({
-  //  *   appstore: {
-  //  *     bundleId: 'com.example.app',
-  //  *     appAppleId: 123456789
-  //  *   },
-  //  *   playstore: {
-  //  *     email: 'service-account@project.iam.gserviceaccount.com',
-  //  *     key: '-----BEGIN PRIVATE KEY-----\n...'
-  //  *   },
-  //  *   paddle: {
-  //  *     apiKey: 'your-paddle-api-key',
-  //  *     secretKey: 'your-webhook-secret'
-  //  *   }
-  //  * });
-  //  *
-  //  * // Now use raw payloads
-  //  * await galvaWithCreds.billingEvent.appstore('user-123', signedPayload);
-  //  * await galvaWithCreds.billingEvent.playstore('user-123', base64Payload);
-  //  * await galvaWithCreds.billingEvent.paddle('user-123', rawBody, signature);
-  //  * ```
-  //  */
-  // public withCredentials(credentials: CredentialsConfig): GalvaWithCreds {
-  //   return new GalvaWithCreds(this.config, this.baseUrl, credentials);
-  // }
-
-  /**
-   * Billing event handlers for different payment platforms.
-   *
-   * @property {Function} appstore - Handle Apple App Store billing events
-   * @property {Function} playstore - Handle Google Play Store billing events (decoded payload)
-   * @property {Function} paddle - Handle Paddle billing events (verified event)
-   */
-  public billingEvent = {
-    /**
-     * Tracks an Apple App Store billing event for a specific end user.
-     *
-     * @param {string} endUserId - Unique identifier for the end user in your system
-     * @param {Object} payload - App Store notification payload
-     * @param {string} payload.signedPayload - The signed payload from Apple's server notification
-     * @param {string} payload.bundleId - The app's bundle identifier (e.g., 'com.example.app')
-     * @param {number} payload.appAppleId - The app's Apple ID from App Store Connect
-     * @param {Record<string, any>} [options] - Additional options to pass with the request
-     * @throws {GalvaError} Throws if the API request fails
-     * @example
-     * ```typescript
-     * try {
-     *   await galva.billingEvent.appstore('user-123', {
-     *     signedPayload: signedPayloadFromApple,
-     *     bundleId: 'com.example.myapp',
-     *     appAppleId: 123456789
-     *   });
-     * } catch (error) {
-     *   if (error instanceof GalvaError) {
-     *     console.error(error.code, error.message);
-     *   }
-     * }
-     * ```
-     */
-    appstore: async (
-      endUserId: string,
-      payload: {
-        signedPayload: string;
-        bundleId: string;
-        appAppleId: number;
-      },
-      options?: Record<string, any>,
-    ): Promise<void> => {
-      const { signedPayload, bundleId, appAppleId } = payload;
-      await this.sendRequest("POST", "/endUsers/billingEvents", {
-        platform: "appstore",
-        endUserId,
-        payload: {
-          signedPayload,
-          appAppleId: appAppleId,
-          bundleId: bundleId,
-          env: this.config.environment,
-        },
-        options,
-      });
-    },
-
-    /**
-     * Tracks a Google Play Store billing event for a specific end user.
-     * Use this method when you have an already-decoded developer notification.
-     *
-     * @param {string} endUserId - Unique identifier for the end user in your system
-     * @param {PlaystoreDeveloperNotification} payload - Decoded developer notification object
-     * @returns {Promise<void>}
-     *
-     * @example
-     * ```typescript
-     * await galva.billingEvent.playstore('user-123', decodedNotification);
-     * ```
-     */
-    playstore: async (
-      endUserId: string,
-      payload: PlaystoreDeveloperNotification,
-    ): Promise<void> => {
-      await this.sendRequest("POST", "/endUsers/billingEvents", {
-        platform: "playstore",
-        endUserId,
-        payload,
-      });
-    },
-
-    /**
-     * Tracks a Paddle billing event for a specific end user.
-     * Use this method when you have an already-verified Paddle event entity.
-     *
-     * @param {string} endUserId - Unique identifier for the end user in your system
-     * @param {EventEntity} eventEntity - Already-verified Paddle event entity
-     * @returns {Promise<void>}
-     *
-     * @example
-     * ```typescript
-     * await galva.billingEvent.paddle('user-123', verifiedEvent);
-     * ```
-     */
-    paddle: async (
-      endUserId: string,
-      eventEntity: EventEntity,
-    ): Promise<void> => {
-      await this.sendRequest("POST", "/endUsers/billingEvents", {
-        platform: "paddle",
-        endUserId,
-        payload: eventEntity,
-      });
-    },
-  };
-
-  /**
-   * End user management methods.
-   */
-  public endUser = {
-    /**
-     * Identifies an end user with optional traits and context.
-     *
-     * @param {string} endUserId - Unique identifier for the end user in your system
-     * @param {Object} [options] - Optional identification data
-     * @param {string} [options.timestamp] - ISO 8601 timestamp of when the identification occurred
-     * @param {Record<string, any>} [options.context] - Additional context about the identification
-     * @param {EndUserTraits} [options.traits] - User traits/attributes to associate with the user. Use EndUserDefaultTraitName enum for built-in traits.
-     * @throws {GalvaError} Throws if the API request fails
-     * @example
-     * ```typescript
-     * import { EndUserDefaultTraitName, GalvaError } from 'galva';
-     *
-     * try {
-     *   await galva.endUser.identify('user-123', {
-     *     timestamp: new Date().toISOString(),
-     *     traits: {
-     *       [EndUserDefaultTraitName.EMAIL]: 'user@example.com',
-     *       [EndUserDefaultTraitName.FULL_NAME]: 'John Doe',
-     *       plan: 'premium', // custom trait
-     *     },
-     *     context: { source: 'web-app' }
-     *   });
-     * } catch (error) {
-     *   if (error instanceof GalvaError) {
-     *     console.error(error.code, error.message);
-     *   }
-     * }
-     * ```
-     */
-    identify: async (
-      endUserId: string,
-      options?: {
-        timestamp?: string;
-        context?: Record<string, any>;
-        traits?: EndUserTraits;
-      },
-    ): Promise<void> => {
-      await this.sendRequest("POST", "/endUsers:identify", {
-        endUserId,
-        timestamp: options?.timestamp,
-        context: options?.context,
-        traits: options?.traits,
-      });
-    },
-
-    /**
-     * Updates an end user's default profile info (default traits).
-     *
-     * @param {string} endUserId - Unique identifier for the end user in your system
-     * @param {EndUserDefaultInfo} defaultInfo - User profile info to update
-     * @throws {GalvaError} Throws if the API request fails
-     * @example
-     * ```typescript
-     * import { GalvaError } from 'galva';
-     *
-     * try {
-     *   await galva.endUser.updateDefaultInfo('user-123', {
-     *     email: 'user@example.com',
-     *     fullName: 'John Doe',
-     *     country: 'US',
-     *     timezone: 'America/New_York',
-     *   });
-     * } catch (error) {
-     *   if (error instanceof GalvaError) {
-     *     console.error(error.code, error.message);
-     *   }
-     * }
-     * ```
-     */
-    updateDefaultInfo: async (
-      endUserId: string,
-      defaultInfo: EndUserDefaultInfo,
-    ): Promise<void> => {
-      const traits: EndUserTraits = {};
-
-      for (const [key, value] of Object.entries(defaultInfo)) {
-        if (value !== undefined) {
-          const traitName =
-            END_USER_DEFAULT_INFO_TO_TRAIT_MAP[key as keyof EndUserDefaultInfo];
-          traits[traitName] = value;
-        }
-      }
-
-      await this.sendRequest("POST", "/endUsers:identify", {
-        endUserId,
-        traits,
-      });
-    },
-  };
-}
-
-/**
- * Galva SDK client with pre-configured credentials for tracking billing events.
- * Use this class when you need to pass raw payloads that require decoding/verification.
- * Obtain an instance via `galva.withCredentials(...)`.
- *
- * @class GalvaWithCreds
- * @example
- * ```typescript
- * const galvaWithCreds = new Galva({ apiKey: 'your-api-key' }).withCredentials({
- *   appstore: {
- *     bundleId: 'com.example.app',
- *     appAppleId: 123456789
- *   },
- *   playstore: {
- *     email: 'service-account@project.iam.gserviceaccount.com',
- *     key: '-----BEGIN PRIVATE KEY-----\n...'
- *   },
- *   paddle: {
- *     apiKey: 'your-paddle-api-key',
- *     secretKey: 'your-webhook-secret'
- *   }
- * });
- *
- * // Track an App Store billing event with signed payload
- * await galvaWithCreds.billingEvent.appstore('user-123', signedPayload);
- *
- * // Track a Play Store billing event with base64 payload
- * await galvaWithCreds.billingEvent.playstore('user-123', base64Payload);
- *
- * // Track a Paddle billing event with raw body
- * await galvaWithCreds.billingEvent.paddle('user-123', rawBody, signature);
- * ```
- */
 class GalvaWithCreds extends GalvaBase {
   // private config: GalvaOptions;
   // private readonly baseUrl: string;
   private credentials: CredentialsConfig;
 
   /**
-   * Creates a new GalvaWithCreds client instance.
-   * This constructor is internal - use `galva.withCredentials(...)` instead.
-   *
-   * @internal
+   * @internal Use `galva.withCredentials(...)` instead.
    */
   constructor(config: GalvaOptions, credentials: CredentialsConfig) {
     super(config);
@@ -652,23 +251,19 @@ class GalvaWithCreds extends GalvaBase {
   }
 
   /**
-   * Billing event handlers for different payment platforms with credential support.
-   *
-   * @property {Function} appstore - Handle Apple App Store billing events (signed payload only)
-   * @property {Function} playstore - Handle Google Play Store billing events (raw base64 payload)
-   * @property {Function} paddle - Handle Paddle billing events (raw body with verification)
+   * Billing event handlers with credential support.
+   * @property {Function} appstore - App Store events (signed payload only)
+   * @property {Function} playstore - Play Store events (raw base64 payload)
+   * @property {Function} paddle - Paddle events (raw body with verification)
    */
   public billingEvent = {
     /**
-     * Tracks an Apple App Store billing event for a specific end user.
-     * Uses the bundleId and appAppleId from withCredentials().
-     *
-     * @param {string} endUserId - Unique identifier for the end user in your system
-     * @param {string} signedPayload - The signed payload from Apple's server notification
-     * @param {Record<string, any>} [options] - Additional options to pass with the request
+     * Tracks an App Store billing event. Uses credentials from withCredentials().
+     * @param {string} endUserId - End user ID
+     * @param {string} signedPayload - Signed payload from Apple
+     * @param {Record<string, any>} [options] - Additional options
      * @returns {Promise<void>}
-     * @throws {GalvaError} If appstore credentials were not provided or API request fails
-     *
+     * @throws {GalvaError} If credentials missing or API fails
      * @example
      * ```typescript
      * await galvaWithCreds.billingEvent.appstore('user-123', signedPayload);
@@ -681,14 +276,14 @@ class GalvaWithCreds extends GalvaBase {
     ): Promise<void> => {
       if (!this.credentials.appstore) {
         throw new GalvaError({
-          code: "MISSING_CREDENTIALS",
+          code: 'MISSING_CREDENTIALS',
           message:
-            "App Store credentials are required. Provide them in withCredentials().",
+            'App Store credentials are required. Provide them in withCredentials().',
         });
       }
 
-      await this.sendRequest("POST", "/endUsers/billingEvents", {
-        platform: "appstore",
+      await this.sendRequest('POST', '/endUsers/billingEvents', {
+        platform: 'appstore',
         endUserId,
         payload: {
           signedPayload,
@@ -701,14 +296,11 @@ class GalvaWithCreds extends GalvaBase {
     },
 
     /**
-     * Tracks a Google Play Store billing event for a specific end user.
-     * Decodes the base64 payload and fetches subscription details from Play Store API.
-     *
-     * @param {string} endUserId - Unique identifier for the end user in your system
-     * @param {string} base64Payload - Base64-encoded payload from Google Pub/Sub
+     * Tracks a Play Store billing event. Decodes payload and fetches subscription details.
+     * @param {string} endUserId - End user ID
+     * @param {string} base64Payload - Base64 payload from Pub/Sub
      * @returns {Promise<void>}
-     * @throws {GalvaError} If playstore credentials were not provided or API request fails
-     *
+     * @throws {GalvaError} If credentials missing or API fails
      * @example
      * ```typescript
      * await galvaWithCreds.billingEvent.playstore('user-123', base64Payload);
@@ -720,38 +312,38 @@ class GalvaWithCreds extends GalvaBase {
     ): Promise<void> => {
       if (!this.credentials.playstore) {
         throw new GalvaError({
-          code: "MISSING_CREDENTIALS",
+          code: 'MISSING_CREDENTIALS',
           message:
-            "Play Store credentials are required. Provide them in withCredentials().",
+            'Play Store credentials are required. Provide them in withCredentials().',
         });
       }
 
       const decodedPayloadString = Buffer.from(
         base64Payload,
-        "base64",
+        'base64',
       ).toString();
       let decodedPayload: PlaystoreDeveloperNotification | null = null;
       try {
         decodedPayload = JSON.parse(decodedPayloadString);
       } catch (error) {
         throw new GalvaError({
-          code: "INVALID_PAYLOAD",
-          message: "Invalid base64 payload: unable to parse JSON.",
+          code: 'INVALID_PAYLOAD',
+          message: 'Invalid base64 payload: unable to parse JSON.',
         });
       }
 
-      if (!decodedPayload || typeof decodedPayload !== "object") {
+      if (!decodedPayload || typeof decodedPayload !== 'object') {
         throw new GalvaError({
-          code: "INVALID_PAYLOAD",
-          message: "Decoded payload is not a valid JSON object.",
+          code: 'INVALID_PAYLOAD',
+          message: 'Decoded payload is not a valid JSON object.',
         });
       }
 
-      if (!("subscriptionNotification" in decodedPayload)) {
+      if (!('subscriptionNotification' in decodedPayload)) {
         throw new GalvaError({
-          code: "INVALID_PAYLOAD",
+          code: 'INVALID_PAYLOAD',
           message:
-            "Decoded payload does not contain subscriptionNotification field.",
+            'Decoded payload does not contain subscriptionNotification field.',
         });
       }
 
@@ -769,26 +361,23 @@ class GalvaWithCreds extends GalvaBase {
         },
       };
 
-      await this.sendRequest("POST", "/endUsers/billingEvents", {
-        platform: "playstore",
+      await this.sendRequest('POST', '/endUsers/billingEvents', {
+        platform: 'playstore',
         endUserId,
         payload: finalPayload,
       });
     },
 
     /**
-     * Tracks a Paddle billing event for a specific end user.
-     * Verifies the webhook signature and unmarshals the event.
-     *
-     * @param {string} endUserId - Unique identifier for the end user in your system
-     * @param {string} rawBody - Raw request body from Paddle webhook
-     * @param {string} signature - Signature from the Paddle-Signature header
+     * Tracks a Paddle billing event. Verifies signature and unmarshals the event.
+     * @param {string} endUserId - End user ID
+     * @param {string} rawBody - Raw body from Paddle webhook
+     * @param {string} signature - Paddle-Signature header value
      * @returns {Promise<void>}
-     * @throws {GalvaError} If paddle credentials were not provided or API request fails
-     *
+     * @throws {GalvaError} If credentials missing or API fails
      * @example
      * ```typescript
-     * await galvaWithCreds.billingEvent.paddle('user-123', rawBody, req.headers['paddle-signature']);
+     * await galvaWithCreds.billingEvent.paddle('user-123', rawBody, signature);
      * ```
      */
     paddle: async (
@@ -798,9 +387,9 @@ class GalvaWithCreds extends GalvaBase {
     ): Promise<void> => {
       if (!this.credentials.paddle) {
         throw new GalvaError({
-          code: "MISSING_CREDENTIALS",
+          code: 'MISSING_CREDENTIALS',
           message:
-            "Paddle credentials are required. Provide them in withCredentials().",
+            'Paddle credentials are required. Provide them in withCredentials().',
         });
       }
 
@@ -815,13 +404,13 @@ class GalvaWithCreds extends GalvaBase {
         );
       } catch (error) {
         throw new GalvaError({
-          code: "INVALID_WEBHOOK",
+          code: 'INVALID_WEBHOOK',
           message: `Invalid Paddle webhook data: ${(error as Error).message}`,
         });
       }
 
-      await this.sendRequest("POST", "/endUsers/billingEvents", {
-        platform: "paddle",
+      await this.sendRequest('POST', '/endUsers/billingEvents', {
+        platform: 'paddle',
         endUserId,
         payload: eventData,
       });
@@ -829,29 +418,103 @@ class GalvaWithCreds extends GalvaBase {
   };
 }
 
-export class Galva {
-  private config: GalvaOptions & { credentials?: CredentialsConfig };
-
-  constructor(
-    options?: GalvaOptions & {
-      credentials?: CredentialsConfig;
-    },
-  ) {
-    this.config = {
-      ...options,
-      credentials: options?.credentials || undefined,
-    };
-    // if (options?.credentials) {
-    //   return new GalvaWithCreds(options, options.credentials);
-    // }
-    // return new GalvaWithoutCreds(options);
+export class Galva extends GalvaBase {
+  constructor(options?: GalvaOptions) {
+    super(options);
   }
+
+  /**
+   * Billing event handlers for different payment platforms.
+   * @property {Function} appstore - App Store events
+   * @property {Function} playstore - Play Store events (decoded payload)
+   * @property {Function} paddle - Paddle events (verified event)
+   */
+  public billingEvent = {
+    /**
+     * Tracks an App Store billing event.
+     * @param {string} endUserId - End user ID
+     * @param {Object} payload - App Store notification payload
+     * @param {string} payload.signedPayload - Signed payload from Apple
+     * @param {string} payload.bundleId - App bundle identifier
+     * @param {number} payload.appAppleId - App Apple ID
+     * @param {Record<string, any>} [options] - Additional options
+     * @throws {GalvaError} If API request fails
+     * @example
+     * ```typescript
+     * await galva.billingEvent.appstore('user-123', {
+     *   signedPayload,
+     *   bundleId: 'com.example.app',
+     *   appAppleId: 123456789
+     * });
+     * ```
+     */
+    appstore: async (
+      endUserId: string,
+      payload: {
+        signedPayload: string;
+        bundleId: string;
+        appAppleId: number;
+      },
+      options?: Record<string, any>,
+    ): Promise<void> => {
+      const { signedPayload, bundleId, appAppleId } = payload;
+      await this.sendRequest('POST', '/endUsers/billingEvents', {
+        platform: 'appstore',
+        endUserId,
+        payload: {
+          signedPayload,
+          appAppleId: appAppleId,
+          bundleId: bundleId,
+          env: this.config.environment,
+        },
+        options,
+      });
+    },
+
+    /**
+     * Tracks a Play Store billing event with decoded notification.
+     * @param {string} endUserId - End user ID
+     * @param {PlaystoreDeveloperNotification} payload - Decoded developer notification
+     * @returns {Promise<void>}
+     * @example
+     * ```typescript
+     * await galva.billingEvent.playstore('user-123', decodedNotification);
+     * ```
+     */
+    playstore: async (
+      endUserId: string,
+      payload: PlaystoreDeveloperNotification,
+    ): Promise<void> => {
+      await this.sendRequest('POST', '/endUsers/billingEvents', {
+        platform: 'playstore',
+        endUserId,
+        payload,
+      });
+    },
+
+    /**
+     * Tracks a Paddle billing event with verified event entity.
+     * @param {string} endUserId - End user ID
+     * @param {EventEntity} eventEntity - Verified Paddle event
+     * @returns {Promise<void>}
+     * @example
+     * ```typescript
+     * await galva.billingEvent.paddle('user-123', verifiedEvent);
+     * ```
+     */
+    paddle: async (
+      endUserId: string,
+      eventEntity: EventEntity,
+    ): Promise<void> => {
+      await this.sendRequest('POST', '/endUsers/billingEvents', {
+        platform: 'paddle',
+        endUserId,
+        payload: eventEntity,
+      });
+    },
+  };
 
   withCredentials(credentials: CredentialsConfig) {
     return new GalvaWithCreds(this.config, credentials);
-  }
-
-  withoutCredentials() {
-    return new GalvaWithoutCreds(this.config);
   }
 }
