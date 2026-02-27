@@ -88,7 +88,7 @@ export interface CredentialsConfig {
   paddle?: PaddleCredentials;
 }
 
-const PRODUCTION_API_URL = 'https://api.galva.io';
+const PRODUCTION_API_URL = 'https://api.galva.dev';
 const DEVELOPMENT_API_URL = 'https://api.galva.dev';
 
 /**
@@ -148,6 +148,7 @@ class GalvaBase {
       });
 
       if (!response.ok) {
+        console.log(response);
         const errorResponse = await response.json();
         throw new GalvaError(errorResponse);
       }
@@ -245,8 +246,6 @@ class GalvaWithCreds extends GalvaBase {
    */
   constructor(config: GalvaOptions, credentials: CredentialsConfig) {
     super(config);
-    // this.config = config;
-    // this.baseUrl = baseUrl;
     this.credentials = credentials;
   }
 
@@ -283,15 +282,21 @@ class GalvaWithCreds extends GalvaBase {
       }
 
       await this.sendRequest('POST', '/endUsers/billingEvents', {
-        platform: 'appstore',
-        endUserId,
-        payload: {
-          signedPayload,
-          appAppleId: this.credentials.appstore.appAppleId,
-          bundleId: this.credentials.appstore.bundleId,
-          env: this.config.environment,
+        type: 'raw',
+        event: {
+          platform: 'appstore',
+          endUserId,
+          payload: {
+            signedPayload,
+            appAppleId: this.credentials.appstore.appAppleId,
+            bundleId: this.credentials.appstore.bundleId,
+            environment:
+              this.config.environment === 'development'
+                ? 'Sandbox'
+                : 'Production',
+          },
+          options,
         },
-        options,
       });
     },
 
@@ -459,15 +464,21 @@ export class Galva extends GalvaBase {
     ): Promise<void> => {
       const { signedPayload, bundleId, appAppleId } = payload;
       await this.sendRequest('POST', '/endUsers/billingEvents', {
-        platform: 'appstore',
-        endUserId,
-        payload: {
-          signedPayload,
-          appAppleId: appAppleId,
-          bundleId: bundleId,
-          env: this.config.environment,
+        type: 'raw',
+        event: {
+          platform: 'appstore',
+          endUserId,
+          payload: {
+            signedPayload,
+            appAppleId: appAppleId,
+            bundleId: bundleId,
+            environment:
+              this.config.environment === 'development'
+                ? 'Sandbox'
+                : 'Production',
+          },
+          options,
         },
-        options,
       });
     },
 
@@ -486,9 +497,12 @@ export class Galva extends GalvaBase {
       payload: PlaystoreDeveloperNotification,
     ): Promise<void> => {
       await this.sendRequest('POST', '/endUsers/billingEvents', {
-        platform: 'playstore',
-        endUserId,
-        payload,
+        type: 'raw',
+        event: {
+          platform: 'playstore',
+          endUserId,
+          payload,
+        },
       });
     },
 
@@ -507,9 +521,12 @@ export class Galva extends GalvaBase {
       eventEntity: EventEntity,
     ): Promise<void> => {
       await this.sendRequest('POST', '/endUsers/billingEvents', {
-        platform: 'paddle',
-        endUserId,
-        payload: eventEntity,
+        type: 'raw',
+        event: {
+          platform: 'paddle',
+          endUserId,
+          payload: eventEntity,
+        },
       });
     },
   };
