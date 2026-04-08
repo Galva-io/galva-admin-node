@@ -368,9 +368,12 @@ class GalvaWithCreds extends GalvaBase {
       };
 
       await this.sendRequest('POST', '/endUsers/billingEvents', {
-        platform: 'playstore',
-        endUserId,
-        payload: finalPayload,
+        type: 'raw',
+        event: {
+          platform: 'playstore',
+          endUserId,
+          payload: finalPayload,
+        },
       });
     },
 
@@ -416,9 +419,12 @@ class GalvaWithCreds extends GalvaBase {
       }
 
       await this.sendRequest('POST', '/endUsers/billingEvents', {
-        platform: 'paddle',
-        endUserId,
-        payload: eventData,
+        type: 'raw',
+        event: {
+          platform: 'paddle',
+          endUserId,
+          payload: eventData,
+        },
       });
     },
   };
