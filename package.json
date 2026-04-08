@@ -1,6 +1,6 @@
 {
   "name": "@galva-io/galva-admin-node",
-  "version": "1.0.2-dev",
+  "version": "1.0.3-dev",
   "description": "Node.js SDK for Galva Admin API",
   "type": "module",
   "main": "./dist/index.cjs",
