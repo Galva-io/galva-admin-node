@@ -360,7 +360,6 @@ class GalvaWithCreds extends GalvaBase {
 
       const finalPayload: PlaystoreDeveloperNotification = {
         ...decodedPayload,
-        eventTimeMillis: Number(decodedPayload.eventTimeMillis),
         subscriptionNotification: {
           ...decodedPayload.subscriptionNotification,
           subscriptionPurchase: subscription.data,
