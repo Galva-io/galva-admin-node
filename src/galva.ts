@@ -367,6 +367,21 @@ class GalvaWithCreds extends GalvaBase {
         },
       };
 
+      console.log(
+        'ANDROID REQUEST PAYLOAD',
+        JSON.stringify(
+          {
+            type: 'raw',
+            event: {
+              platform: 'playstore',
+              endUserId,
+              payload: finalPayload,
+            },
+          },
+          null,
+          2,
+        ),
+      );
       await this.sendRequest('POST', '/endUsers/billingEvents', {
         type: 'raw',
         event: {
