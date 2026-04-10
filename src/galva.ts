@@ -432,6 +432,22 @@ class GalvaWithCreds extends GalvaBase {
         });
       }
 
+      console.log(
+        'PADDLE REQUEST PAYLOAD',
+        JSON.stringify(
+          {
+            type: 'raw',
+            event: {
+              platform: 'paddle',
+              endUserId,
+              payload: eventData,
+            },
+          },
+          null,
+          2,
+        ),
+      );
+
       await this.sendRequest('POST', '/endUsers/billingEvents', {
         type: 'raw',
         event: {
