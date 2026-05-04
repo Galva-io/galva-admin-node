@@ -133,6 +133,11 @@ class GalvaBase {
   ): Promise<void> {
     const url = `${this.baseUrl}${endpoint}`;
 
+    console.log(
+      `GALVA API REQUEST ${method} ${endpoint}`,
+      data ? JSON.stringify(data) : '',
+    );
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
 
@@ -148,8 +153,11 @@ class GalvaBase {
       });
 
       if (!response.ok) {
-        console.log(response);
         const errorResponse = await response.json();
+        console.log(
+          `GALVA API ERROR ${method} ${endpoint} ${response.status}`,
+          JSON.stringify(errorResponse),
+        );
         throw new GalvaError(errorResponse);
       }
     } catch (error) {
@@ -281,7 +289,8 @@ class GalvaWithCreds extends GalvaBase {
         });
       }
 
-      await this.sendRequest('POST', '/endUsers/billingEvents', {
+      const payload = {
+        signedPayload,
         type: 'raw',
         event: {
           platform: 'appstore',
@@ -297,7 +306,9 @@ class GalvaWithCreds extends GalvaBase {
           },
           options,
         },
-      });
+      };
+
+      await this.sendRequest('POST', '/endUsers/billingEvents', payload);
     },
 
     /**
@@ -366,21 +377,6 @@ class GalvaWithCreds extends GalvaBase {
         },
       };
 
-      console.log(
-        'ANDROID REQUEST PAYLOAD',
-        JSON.stringify(
-          {
-            type: 'raw',
-            event: {
-              platform: 'playstore',
-              endUserId,
-              payload: finalPayload,
-            },
-          },
-          null,
-          2,
-        ),
-      );
       await this.sendRequest('POST', '/endUsers/billingEvents', {
         type: 'raw',
         event: {
@@ -431,22 +427,6 @@ class GalvaWithCreds extends GalvaBase {
           message: `Invalid Paddle webhook data: ${(error as Error).message}`,
         });
       }
-
-      console.log(
-        'PADDLE REQUEST PAYLOAD',
-        JSON.stringify(
-          {
-            type: 'raw',
-            event: {
-              platform: 'paddle',
-              endUserId,
-              payload: eventData,
-            },
-          },
-          null,
-          2,
-        ),
-      );
 
       await this.sendRequest('POST', '/endUsers/billingEvents', {
         type: 'raw',
