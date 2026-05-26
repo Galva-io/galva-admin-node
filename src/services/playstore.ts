@@ -1,4 +1,4 @@
-import { PlaystoreCredentials } from '@/galva';
+import { PlaystoreCredentials } from '@/galvaWithCreds';
 import { google } from 'googleapis';
 
 const authentication = (payload: { email: string; key: string }) => {
