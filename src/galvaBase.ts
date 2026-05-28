@@ -84,6 +84,8 @@ export class GalvaBase {
         `GALVA API REQUEST ${method} ${endpoint}`,
         data ? JSON.stringify(data) : '',
       );
+    } else {
+      console.log(`GALVA API REQUEST ${method} ${endpoint}`);
     }
 
     const controller = new AbortController();
@@ -107,6 +109,8 @@ export class GalvaBase {
             `GALVA API ERROR ${method} ${endpoint} ${response.status}`,
             JSON.stringify(errorResponse),
           );
+        } else {
+          console.log(`GALVA API ERROR ${method} ${endpoint} ${response.status}`);
         }
         throw new GalvaError(errorResponse);
       }
@@ -117,6 +121,8 @@ export class GalvaBase {
           `GALVA API SUCCESS ${method} ${endpoint} ${response.status}`,
           body,
         );
+      } else {
+        console.log(`GALVA API SUCCESS ${method} ${endpoint} ${response.status}`);
       }
     } catch (error) {
       if (error instanceof GalvaError) {
