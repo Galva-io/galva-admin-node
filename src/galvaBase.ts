@@ -81,11 +81,11 @@ export class GalvaBase {
 
     if (verbose) {
       console.log(
-        `GALVA API REQUEST ${method} ${endpoint}`,
+        `[Galva] Request: ${method} ${endpoint}`,
         data ? JSON.stringify(data) : '',
       );
     } else {
-      console.log(`GALVA API REQUEST ${method} ${endpoint}`);
+      console.log(`[Galva] Request: ${method} ${endpoint}`);
     }
 
     const controller = new AbortController();
@@ -105,12 +105,14 @@ export class GalvaBase {
       if (!response.ok) {
         const errorResponse = await response.json();
         if (verbose) {
-          console.log(
-            `GALVA API ERROR ${method} ${endpoint} ${response.status}`,
+          console.error(
+            `[Galva] Request failed: ${method} ${endpoint} (${response.status})`,
             JSON.stringify(errorResponse),
           );
         } else {
-          console.log(`GALVA API ERROR ${method} ${endpoint} ${response.status}`);
+          console.error(
+            `[Galva] Request failed: ${method} ${endpoint} (${response.status})`,
+          );
         }
         throw new GalvaError(errorResponse);
       }
@@ -118,11 +120,13 @@ export class GalvaBase {
       if (verbose) {
         const body = await response.text();
         console.log(
-          `GALVA API SUCCESS ${method} ${endpoint} ${response.status}`,
+          `[Galva] Response: ${method} ${endpoint} (${response.status})`,
           body,
         );
       } else {
-        console.log(`GALVA API SUCCESS ${method} ${endpoint} ${response.status}`);
+        console.log(
+          `[Galva] Response: ${method} ${endpoint} (${response.status})`,
+        );
       }
     } catch (error) {
       if (error instanceof GalvaError) {
