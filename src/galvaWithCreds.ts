@@ -2,7 +2,7 @@ import { PlaystoreDeveloperNotification } from './types/playstore';
 import { PlaystoreService } from './services/playstore';
 import { EventEntity, Paddle } from '@paddle/paddle-node-sdk';
 import { GalvaError } from './types/error';
-import { GalvaBase, GalvaOptions } from './galvaBase';
+import { GalvaBase, GalvaOptions, BillingEventOptions } from './galvaBase';
 
 /**
  * Credentials for authenticating with the Google Play Store API.
@@ -62,12 +62,12 @@ export type ForwardRawNotificationPayload =
   | {
       platform: 'appstore';
       signedPayload: string;
-      options?: Record<string, any>;
+      options?: BillingEventOptions;
     }
   | {
       platform: 'playstore';
       base64Payload: string;
-      options?: Record<string, any>;
+      options?: BillingEventOptions;
     }
   | {
       platform: 'paddle';
@@ -97,7 +97,7 @@ export class GalvaWithCreds extends GalvaBase {
      * Tracks an App Store billing event. Uses credentials from withCredentials().
      * @param {string} endUserId - End user ID
      * @param {string} signedPayload - Signed payload from Apple
-     * @param {Record<string, any>} [options] - Additional options
+     * @param {BillingEventOptions} [options] - Additional options (set `verbose` to log requests)
      * @returns {Promise<void>}
      * @throws {GalvaError} If credentials missing or API fails
      * @example
@@ -108,7 +108,7 @@ export class GalvaWithCreds extends GalvaBase {
     appstore: async (
       endUserId: string,
       signedPayload: string,
-      options?: Record<string, any>,
+      options?: BillingEventOptions,
     ): Promise<void> => {
       if (!this.credentials.appstore) {
         throw new GalvaError({
@@ -137,7 +137,12 @@ export class GalvaWithCreds extends GalvaBase {
         },
       };
 
-      await this.sendRequest('POST', '/endUsers/billingEvents', payload);
+      await this.sendRequest(
+        'POST',
+        '/endUsers/billingEvents',
+        payload,
+        options?.verbose,
+      );
     },
 
     /**
@@ -154,7 +159,7 @@ export class GalvaWithCreds extends GalvaBase {
     playstore: async (
       endUserId: string,
       base64Payload: string,
-      options?: Record<string, any>,
+      options?: BillingEventOptions,
     ): Promise<void> => {
       if (!this.credentials.playstore) {
         throw new GalvaError({
@@ -207,15 +212,20 @@ export class GalvaWithCreds extends GalvaBase {
         },
       };
 
-      await this.sendRequest('POST', '/endUsers/billingEvents', {
-        type: 'raw',
-        event: {
-          platform: 'playstore',
-          endUserId,
-          payload: finalPayload,
-          options,
+      await this.sendRequest(
+        'POST',
+        '/endUsers/billingEvents',
+        {
+          type: 'raw',
+          event: {
+            platform: 'playstore',
+            endUserId,
+            payload: finalPayload,
+            options,
+          },
         },
-      });
+        options?.verbose,
+      );
     },
 
     /**

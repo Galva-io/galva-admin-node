@@ -22,6 +22,17 @@ export interface GalvaOptions {
   timeout?: number;
 }
 
+/**
+ * Per-call options for billing event methods.
+ * @interface BillingEventOptions
+ */
+export interface BillingEventOptions {
+  /** Logs the API request, success, and error responses to the console. */
+  verbose?: boolean;
+  /** Arbitrary additional options forwarded to the API. */
+  [key: string]: any;
+}
+
 const PRODUCTION_API_URL = 'https://api.galva.dev';
 const DEVELOPMENT_API_URL = 'https://api.galva.dev';
 
@@ -64,13 +75,16 @@ export class GalvaBase {
     method: 'POST' | 'GET',
     endpoint: string,
     data?: unknown,
+    verbose?: boolean,
   ): Promise<void> {
     const url = `${this.baseUrl}${endpoint}`;
 
-    console.log(
-      `GALVA API REQUEST ${method} ${endpoint}`,
-      data ? JSON.stringify(data) : '',
-    );
+    if (verbose) {
+      console.log(
+        `GALVA API REQUEST ${method} ${endpoint}`,
+        data ? JSON.stringify(data) : '',
+      );
+    }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
@@ -88,11 +102,21 @@ export class GalvaBase {
 
       if (!response.ok) {
         const errorResponse = await response.json();
-        console.log(
-          `GALVA API ERROR ${method} ${endpoint} ${response.status}`,
-          JSON.stringify(errorResponse),
-        );
+        if (verbose) {
+          console.log(
+            `GALVA API ERROR ${method} ${endpoint} ${response.status}`,
+            JSON.stringify(errorResponse),
+          );
+        }
         throw new GalvaError(errorResponse);
+      }
+
+      if (verbose) {
+        const body = await response.text();
+        console.log(
+          `GALVA API SUCCESS ${method} ${endpoint} ${response.status}`,
+          body,
+        );
       }
     } catch (error) {
       if (error instanceof GalvaError) {

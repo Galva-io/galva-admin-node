@@ -1,6 +1,6 @@
 import { PlaystoreDeveloperNotification } from './types/playstore';
 import { EventEntity } from '@paddle/paddle-node-sdk';
-import { GalvaBase, GalvaOptions } from './galvaBase';
+import { GalvaBase, GalvaOptions, BillingEventOptions } from './galvaBase';
 import { GalvaWithCreds, CredentialsConfig } from './galvaWithCreds';
 
 /**
@@ -42,7 +42,7 @@ export class Galva extends GalvaBase {
      * @param {string} payload.signedPayload - Signed payload from Apple
      * @param {string} payload.bundleId - App bundle identifier
      * @param {number} payload.appAppleId - App Apple ID
-     * @param {Record<string, any>} [options] - Additional options
+     * @param {BillingEventOptions} [options] - Additional options (set `verbose` to log requests)
      * @throws {GalvaError} If API request fails
      * @example
      * ```typescript
@@ -60,26 +60,31 @@ export class Galva extends GalvaBase {
         bundleId: string;
         appAppleId: number;
       },
-      options?: Record<string, any>,
+      options?: BillingEventOptions,
     ): Promise<void> => {
       const { signedPayload, bundleId, appAppleId } = payload;
-      await this.sendRequest('POST', '/endUsers/billingEvents', {
-        type: 'raw',
-        event: {
-          platform: 'appstore',
-          endUserId,
-          payload: {
-            signedPayload,
-            appAppleId: appAppleId,
-            bundleId: bundleId,
-            environment:
-              this.config.environment === 'development'
-                ? 'Sandbox'
-                : 'Production',
+      await this.sendRequest(
+        'POST',
+        '/endUsers/billingEvents',
+        {
+          type: 'raw',
+          event: {
+            platform: 'appstore',
+            endUserId,
+            payload: {
+              signedPayload,
+              appAppleId: appAppleId,
+              bundleId: bundleId,
+              environment:
+                this.config.environment === 'development'
+                  ? 'Sandbox'
+                  : 'Production',
+            },
+            options,
           },
-          options,
         },
-      });
+        options?.verbose,
+      );
     },
 
     /**
@@ -95,17 +100,22 @@ export class Galva extends GalvaBase {
     playstore: async (
       endUserId: string,
       payload: PlaystoreDeveloperNotification,
-      options?: Record<string, any>,
+      options?: BillingEventOptions,
     ): Promise<void> => {
-      await this.sendRequest('POST', '/endUsers/billingEvents', {
-        type: 'raw',
-        event: {
-          platform: 'playstore',
-          endUserId,
-          payload,
-          options,
+      await this.sendRequest(
+        'POST',
+        '/endUsers/billingEvents',
+        {
+          type: 'raw',
+          event: {
+            platform: 'playstore',
+            endUserId,
+            payload,
+            options,
+          },
         },
-      });
+        options?.verbose,
+      );
     },
 
     /**
@@ -121,17 +131,22 @@ export class Galva extends GalvaBase {
     paddle: async (
       endUserId: string,
       eventEntity: EventEntity,
-      options?: Record<string, any>,
+      options?: BillingEventOptions,
     ): Promise<void> => {
-      await this.sendRequest('POST', '/endUsers/billingEvents', {
-        type: 'raw',
-        event: {
-          platform: 'paddle',
-          endUserId,
-          payload: eventEntity,
-          options,
+      await this.sendRequest(
+        'POST',
+        '/endUsers/billingEvents',
+        {
+          type: 'raw',
+          event: {
+            platform: 'paddle',
+            endUserId,
+            payload: eventEntity,
+            options,
+          },
         },
-      });
+        options?.verbose,
+      );
     },
 
     /**
@@ -152,7 +167,7 @@ export class Galva extends GalvaBase {
     forwardNotification: async (
       endUserId: string,
       payload: ForwardNotificationPayload,
-      options?: Record<string, any>,
+      options?: BillingEventOptions,
     ): Promise<void> => {
       switch (payload.platform) {
         case 'appstore': {
