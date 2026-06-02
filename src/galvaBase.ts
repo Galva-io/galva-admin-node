@@ -33,7 +33,7 @@ export interface BillingEventOptions {
   [key: string]: any;
 }
 
-const PRODUCTION_API_URL = 'https://api.galva.dev';
+const PRODUCTION_API_URL = 'https://api.revflow.dev';
 const DEVELOPMENT_API_URL = 'https://api.galva.dev';
 
 /**
