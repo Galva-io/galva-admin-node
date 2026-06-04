@@ -119,7 +119,6 @@ export class GalvaWithCreds extends GalvaBase {
       }
 
       const payload = {
-        signedPayload,
         type: 'raw',
         event: {
           platform: 'appstore',
