@@ -73,6 +73,7 @@ export type ForwardRawNotificationPayload =
       platform: 'paddle';
       rawBody: string;
       signature: string;
+      options?: BillingEventOptions;
     };
 
 export class GalvaWithCreds extends GalvaBase {
@@ -243,6 +244,7 @@ export class GalvaWithCreds extends GalvaBase {
       endUserId: string,
       rawBody: string,
       signature: string,
+      options?: BillingEventOptions,
     ): Promise<void> => {
       if (!this.credentials.paddle) {
         throw new GalvaError({
@@ -274,6 +276,7 @@ export class GalvaWithCreds extends GalvaBase {
           platform: 'paddle',
           endUserId,
           payload: eventData,
+          options,
         },
       });
     },
