@@ -318,6 +318,7 @@ export class GalvaWithCreds extends GalvaBase {
             endUserId,
             payload.rawBody,
             payload.signature,
+            payload.options,
           );
       }
     },
