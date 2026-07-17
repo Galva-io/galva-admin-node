@@ -7,7 +7,7 @@ export interface GalvaOptions {
    * Defaults to 'production'. Falls back to NODE_ENV.
    * @type {('production' | 'development')}
    */
-  environment?: 'production' | 'development';
+  environment?: 'production' | 'development' | 'staging';
 
   /**
    * API key from Galva dashboard. Falls back to GALVA_API_KEY env var.
@@ -35,6 +35,8 @@ export interface BillingEventOptions {
 
 const PRODUCTION_API_URL = 'https://api.revflow.dev';
 const DEVELOPMENT_API_URL = 'https://api.galva.dev';
+const STAGING_API_URL = 'https://api.galva-stag.dev';
+
 
 /**
  * Base Galva SDK client with end user management methods.
@@ -68,6 +70,8 @@ export class GalvaBase {
     this.baseUrl =
       this.config.environment === 'development'
         ? DEVELOPMENT_API_URL
+        : this.config.environment === 'staging'
+        ? STAGING_API_URL
         : PRODUCTION_API_URL;
   }
 
