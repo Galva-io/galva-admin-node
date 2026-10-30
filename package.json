@@ -4,7 +4,7 @@
   "description": "Node.js SDK for Galva Admin API",
   "type": "module",
   "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsup",
@@ -28,9 +28,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@paddle/paddle-node-sdk": "^3.6.0",
     "@types/node": "^20.19.33",
-    "googleapis": "^171.4.0",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"
   },
@@ -40,9 +38,5 @@
   "files": [
     "dist",
     "README.md"
-  ],
-  "peerDependencies": {
-    "@paddle/paddle-node-sdk": "^3.6.0",
-    "googleapis": "^171.4.0"
-  }
+  ]
 }

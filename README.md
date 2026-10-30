@@ -5,79 +5,96 @@ Node.js SDK for syncing billing events and managing end users with Galva.
 ## Installation
 
 ```bash
-npm install galva-admin-node
-```
-
-**Peer dependencies** (install as needed):
-```bash
-npm install @paddle/paddle-node-sdk  # For Paddle
-npm install googleapis               # For Play Store
+npm install @galva-io/galva-admin-node
 ```
 
 ## Quick Start
 
 ```typescript
-import { Galva } from 'galva-admin-node';
+import { Galva } from '@galva-io/galva-admin-node';
 
 const galva = new Galva({ apiKey: 'your-api-key' });
-// Or set GALVA_API_KEY environment variable
+// Or set GALVA_API_KEY
+
+// Use the sandbox environment for development
+const sandboxGalva = new Galva({
+  apiKey: 'your-api-key',
+  environment: 'sandbox',
+});
 ```
 
 ## Billing Events
 
-### With Pre-verified Payloads
+### Webhook Forwarding
 
-Use when you've already decoded/verified payloads yourself.
+The SDK forwards billing events through the API-key-authenticated webhook
+ingress. The API key resolves the app integration and `endUserId` is used for
+identity resolution when supplied.
+
+| Provider | Method signature |
+|---|---|
+| App Store | `appstore(signedPayload, endUserId?)` |
+| Google Play | `playstore(base64Payload, endUserId?)` |
+| Paddle | `paddle(rawBody, signature, endUserId?)` |
 
 ```typescript
-// App Store
-await galva.billingEvent.appstore('user-123', {
-  signedPayload: '...',
-  bundleId: 'com.example.app',
-  appAppleId: 123456789,
-});
+// App Store Server Notification signedPayload
+await galva.billingEvent.appstore(signedPayload, 'user-123');
 
-// Play Store (decoded notification)
-await galva.billingEvent.playstore('user-123', decodedNotification);
+// Google Play: message.data from the Pub/Sub push envelope
+await galva.billingEvent.playstore(base64Payload, 'user-123');
 
-// Paddle (verified event)
-await galva.billingEvent.paddle('user-123', verifiedEvent);
+// Raw Paddle request body and Paddle-Signature header
+await galva.billingEvent.paddle(rawBody, signature, 'user-123');
+
+// endUserId is optional for all three methods
+await galva.billingEvent.appstore(signedPayload);
+await galva.billingEvent.playstore(base64Payload);
+await galva.billingEvent.paddle(rawBody, signature);
 ```
 
-### With Credentials (Auto-verification)
+The SDK sends `x-api-key` on every request. Billing requests use the ingress
+host and have these bodies:
 
-Use `withCredentials()` to let the SDK handle decoding and verification.
+| SDK method | HTTP endpoint | JSON body |
+|---|---|---|
+| `billingEvent.appstore` | `POST /appstore` | `{ signedPayload, endUserId? }` |
+| `billingEvent.playstore` | `POST /playstore` | `{ message: { data: base64Payload }, endUserId? }` |
+| `billingEvent.paddle` | `POST /paddle` | `{ rawBody, signature, endUserId? }` |
+
+The ingress resolves the tenant and app from the API key. For Google Play,
+`base64Payload` must decode to a valid Real-time Developer Notification JSON;
+the backend enriches subscription details after ingestion. For Paddle, ingress
+uses the app's configured signing secret to verify the exact raw body against
+the `Paddle-Signature` header from the original Paddle request. The signature is
+webhook input, not a Paddle credential configured in the SDK.
+
+Do not parse and re-serialize the Paddle body before forwarding it, because the
+signature is calculated from the exact raw bytes:
 
 ```typescript
-const galvaWithCreds = galva.withCredentials({
-  appstore: {
-    bundleId: 'com.example.app',
-    appAppleId: 123456789,
-  },
-  playstore: {
-    email: 'service-account@project.iam.gserviceaccount.com',
-    key: '-----BEGIN PRIVATE KEY-----\n...',
-  },
-  paddle: {
-    apiKey: 'pdl_...',
-    secretKey: 'whsec_...',
-  },
-});
+app.post(
+  '/webhooks/paddle',
+  express.raw({ type: 'application/json' }),
+  async (request, response) => {
+    const rawBody = request.body.toString('utf8');
+    const signature = request.header('Paddle-Signature');
 
-// App Store (signed payload only)
-await galvaWithCreds.billingEvent.appstore('user-123', signedPayload);
+    if (!signature) {
+      response.sendStatus(400);
+      return;
+    }
 
-// Play Store (base64 from Pub/Sub - auto-decodes and fetches subscription)
-await galvaWithCreds.billingEvent.playstore('user-123', base64Payload);
-
-// Paddle (raw body + signature - auto-verifies)
-await galvaWithCreds.billingEvent.paddle('user-123', rawBody, signature);
+    await galva.billingEvent.paddle(rawBody, signature, endUserId);
+    response.sendStatus(200);
+  },
+);
 ```
 
 ## End User Management
 
 ```typescript
-import { EndUserDefaultTraitName } from 'galva-admin-node';
+import { EndUserDefaultTraitName } from '@galva-io/galva-admin-node';
 
 // Identify with traits
 await galva.endUser.identify('user-123', {
@@ -101,7 +118,7 @@ await galva.endUser.updateDefaultInfo('user-123', {
 ```typescript
 interface GalvaOptions {
   apiKey?: string;                          // Falls back to GALVA_API_KEY env
-  environment?: 'production' | 'development'; // Falls back to NODE_ENV
+  environment?: 'production' | 'sandbox';   // Defaults to production
   timeout?: number;                         // Request timeout in ms (default: 10000)
 }
 ```
@@ -109,16 +126,19 @@ interface GalvaOptions {
 ## Error Handling
 
 ```typescript
-import { GalvaError } from 'galva-admin-node';
+import { GalvaError } from '@galva-io/galva-admin-node';
 
 try {
-  await galva.billingEvent.appstore('user-123', payload);
+  await galva.billingEvent.appstore(signedPayload, 'user-123');
 } catch (error) {
   if (error instanceof GalvaError) {
     console.error(error.code, error.message);
   }
 }
 ```
+
+Common SDK error codes include `MISSING_API_KEY`, `TIMEOUT`, and
+`HTTP_<status>`.
 
 ## Requirements
 
