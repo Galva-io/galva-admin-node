@@ -14,89 +14,37 @@ npm install @galva-io/galva-admin-node
 import { Galva } from '@galva-io/galva-admin-node';
 
 const galva = new Galva({ apiKey: 'your-api-key' });
-// Or set GALVA_API_KEY
-
-// Use the sandbox environment for development
-const sandboxGalva = new Galva({
-  apiKey: 'your-api-key',
-  environment: 'sandbox',
-});
 ```
 
-## Billing Events
+You can also set the API key with the `GALVA_API_KEY` environment variable.
 
-### Webhook Forwarding
+## Forward Billing Events
 
-The SDK forwards billing events through the API-key-authenticated webhook
-ingress. The API key resolves the app integration and `endUserId` is used for
-identity resolution when supplied.
+Pass the original provider notification to the matching SDK method. Galva
+validates and processes it using the integration associated with your API key.
+An end-user ID is optional and can be included when the user is already known.
 
-| Provider | Method signature |
+| Provider | What to pass |
 |---|---|
-| App Store | `appstore(signedPayload, endUserId?)` |
-| Google Play | `playstore(base64Payload, endUserId?)` |
-| Paddle | `paddle(rawBody, signature, endUserId?)` |
+| App Store | The `signedPayload` from an App Store Server Notification |
+| Google Play | The base64 `message.data` value from Google Pub/Sub |
+| Paddle | The exact raw request body and `Paddle-Signature` header |
 
 ```typescript
-// App Store Server Notification signedPayload
 await galva.billingEvent.appstore(signedPayload, 'user-123');
-
-// Google Play: message.data from the Pub/Sub push envelope
 await galva.billingEvent.playstore(base64Payload, 'user-123');
-
-// Raw Paddle request body and Paddle-Signature header
 await galva.billingEvent.paddle(rawBody, signature, 'user-123');
-
-// endUserId is optional for all three methods
-await galva.billingEvent.appstore(signedPayload);
-await galva.billingEvent.playstore(base64Payload);
-await galva.billingEvent.paddle(rawBody, signature);
 ```
 
-The SDK sends `x-api-key` on every request. Billing requests use the ingress
-host and have these bodies:
-
-| SDK method | HTTP endpoint | JSON body |
-|---|---|---|
-| `billingEvent.appstore` | `POST /appstore` | `{ signedPayload, endUserId? }` |
-| `billingEvent.playstore` | `POST /playstore` | `{ message: { data: base64Payload }, endUserId? }` |
-| `billingEvent.paddle` | `POST /paddle` | `{ rawBody, signature, endUserId? }` |
-
-The ingress resolves the tenant and app from the API key. For Google Play,
-`base64Payload` must decode to a valid Real-time Developer Notification JSON;
-the backend enriches subscription details after ingestion. For Paddle, ingress
-uses the app's configured signing secret to verify the exact raw body against
-the `Paddle-Signature` header from the original Paddle request. The signature is
-webhook input, not a Paddle credential configured in the SDK.
-
-Do not parse and re-serialize the Paddle body before forwarding it, because the
-signature is calculated from the exact raw bytes:
-
-```typescript
-app.post(
-  '/webhooks/paddle',
-  express.raw({ type: 'application/json' }),
-  async (request, response) => {
-    const rawBody = request.body.toString('utf8');
-    const signature = request.header('Paddle-Signature');
-
-    if (!signature) {
-      response.sendStatus(400);
-      return;
-    }
-
-    await galva.billingEvent.paddle(rawBody, signature, endUserId);
-    response.sendStatus(200);
-  },
-);
-```
+Omit the final `endUserId` argument when the notification cannot yet be linked
+to a user. For Paddle, do not parse and re-serialize the request body before
+passing it to the SDK; signature verification requires the original raw body.
 
 ## End User Management
 
 ```typescript
 import { EndUserDefaultTraitName } from '@galva-io/galva-admin-node';
 
-// Identify with traits
 await galva.endUser.identify('user-123', {
   traits: {
     [EndUserDefaultTraitName.EMAIL]: 'user@example.com',
@@ -104,24 +52,19 @@ await galva.endUser.identify('user-123', {
     customTrait: 'value',
   },
 });
-
-// Update default profile info
-await galva.endUser.updateDefaultInfo('user-123', {
-  email: 'user@example.com',
-  fullName: 'John Doe',
-  country: 'US',
-});
 ```
+
+Use `updateDefaultInfo` when you prefer friendly property names such as
+`email`, `fullName`, and `country`. Use `identify` for custom traits or when you
+need to include context and a timestamp.
 
 ## Configuration
 
-```typescript
-interface GalvaOptions {
-  apiKey?: string;                          // Falls back to GALVA_API_KEY env
-  environment?: 'production' | 'sandbox';   // Defaults to production
-  timeout?: number;                         // Request timeout in ms (default: 10000)
-}
-```
+| Option | Description | Default |
+|---|---|---|
+| `apiKey` | API key from the Galva dashboard; falls back to `GALVA_API_KEY` | Required |
+| `environment` | `production` or `sandbox` | `production` |
+| `timeout` | Request timeout in milliseconds | `10000` |
 
 ## Error Handling
 
