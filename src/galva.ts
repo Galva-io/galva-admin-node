@@ -186,7 +186,7 @@ class GalvaBase {
         traits?: EndUserTraits;
       },
     ): Promise<void> => {
-      await this.sendApiRequest('/endUsers:identify', {
+      await this.sendApiRequest('/endUsers/identify', {
         endUserId,
         timestamp: options?.timestamp,
         context: options?.context,
@@ -221,7 +221,7 @@ class GalvaBase {
         }
       }
 
-      await this.sendApiRequest('/endUsers:identify', {
+      await this.sendApiRequest('/endUsers/identify', {
         endUserId,
         traits,
       });
